@@ -1,0 +1,35 @@
+appId: com.yukukotani.pi-voice
+productName: pi-voice
+directories:
+  buildResources: build
+  output: release
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,bun.lock}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{CLAUDE.md,index.ts}'
+asarUnpack:
+  - node_modules/iohook-macos/**
+  - out/main/chunks/*.node
+mac:
+  category: public.app-category.utilities
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+  hardenedRuntime: true
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: "This app requires microphone access for voice input."
+    NSAppleEventsUsageDescription: "This app requires accessibility permissions to detect Fn key."
+dmg:
+  artifactName: ${name}-${version}-${arch}.${ext}
+npmRebuild: false

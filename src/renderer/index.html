@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; media-src blob:">
   <title>pi-voice</title>
   <style>
     * {
@@ -143,6 +142,6 @@
     <div class="status-message" id="statusMessage">Hold Fn to speak</div>
   </div>
   <div class="hint">Fn key: push-to-talk</div>
-  <script src="./renderer.js"></script>
+  <script type="module" src="./renderer.ts"></script>
 </body>
 </html>

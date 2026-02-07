@@ -1,5 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
-import path from "node:path";
+import { app, BrowserWindow, ipcMain, session } from "electron";
 import { fileURLToPath } from "node:url";
 import { FnHook } from "./services/fn-hook.js";
 import { transcribe } from "./services/stt.js";
@@ -11,9 +10,6 @@ import {
 } from "./services/tts.js";
 import * as piSession from "./services/pi-session.js";
 import { IPC, type AppState } from "./shared/types.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 let fnHook: FnHook | null = null;
@@ -36,13 +32,23 @@ function createWindow() {
     alwaysOnTop: true,
     titleBarStyle: "hiddenInset",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: fileURLToPath(
+        new URL("../preload/index.cjs", import.meta.url)
+      ),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
+  if (!app.isPackaged && process.env["ELECTRON_RENDERER_URL"]) {
+    mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
+  } else {
+    mainWindow.loadFile(
+      fileURLToPath(
+        new URL("../renderer/index.html", import.meta.url)
+      )
+    );
+  }
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -170,8 +176,24 @@ function setupFnHook() {
   }
 }
 
+function setupCsp() {
+  const isDev = !app.isPackaged && !!process.env["ELECTRON_RENDERER_URL"];
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const csp = isDev
+      ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* http://localhost:*; media-src blob:"
+      : "default-src 'self'; style-src 'self' 'unsafe-inline'; media-src blob:";
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [csp],
+      },
+    });
+  });
+}
+
 // App lifecycle
 app.whenReady().then(() => {
+  setupCsp();
   createWindow();
   setupIpcHandlers();
   setupFnHook();

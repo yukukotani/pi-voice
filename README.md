@@ -1,15 +1,45 @@
 # pi-voice
 
-To install dependencies:
+## Setup
 
 ```bash
 bun install
 ```
 
-To run:
+## Development
 
 ```bash
-bun run index.ts
+bun run dev
 ```
 
-This project was created using `bun init` in bun v1.3.8. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+HMR 付きの Vite dev server で renderer を配信しつつ Electron を起動します。
+
+## Build
+
+```bash
+bun run build
+```
+
+`out/` にプロダクションビルドを出力します。
+
+## Preview
+
+```bash
+bun run preview
+```
+
+ビルド済みの成果物で Electron を起動して動作確認します。
+
+## Distribution
+
+```bash
+bun run dist
+```
+
+`bun run build` + electron-builder で macOS 向けの dmg/zip を `release/` に生成します。
+
+パッケージングせずディレクトリ出力のみ（テスト用）:
+
+```bash
+bun run dist:dir
+```
