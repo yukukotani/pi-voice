@@ -48,7 +48,8 @@ export async function prompt(
       } else if (event.assistantMessageEvent.type === "text_end") {
         const content = event.assistantMessageEvent.content.trim();
         if (content.length > 0) {
-          options?.onTextEnd?.(event.assistantMessageEvent.content);
+          console.log(`[PiSession] Response: ${content}`);
+          options?.onTextEnd?.(content);
         }
       }
     }
