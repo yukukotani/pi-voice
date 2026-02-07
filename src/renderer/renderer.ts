@@ -8,7 +8,6 @@ const statusMessage = document.getElementById("statusMessage")!;
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 let audioContext: AudioContext | null = null;
-let currentSource: AudioBufferSourceNode | null = null;
 
 const stateConfig: Record<
   string,
@@ -99,39 +98,98 @@ window.piVoice.onStopRecording(() => {
   }
 });
 
-// Audio playback from main
-window.piVoice.onPlayAudio(async (audioData) => {
+// ── Streaming PCM playback ──────────────────────────────────────────
+let streamSampleRate = 24000;
+let streamChannels = 1;
+let streamBitsPerSample = 16;
+let streamNextPlayTime = 0;
+let streamActiveSources = 0;
+let streamEnded = false;
+
+function stopStreamPlayback() {
+  // Cancel all scheduled sources is not easily possible with Web Audio,
+  // but resetting the context effectively stops everything.
+  streamActiveSources = 0;
+  streamEnded = false;
+  streamNextPlayTime = 0;
+}
+
+window.piVoice.onPlayAudioStreamStart((meta) => {
   try {
     if (!audioContext) {
       audioContext = new AudioContext();
     }
 
-    // Stop any currently playing audio
-    if (currentSource) {
-      try {
-        currentSource.stop();
-      } catch {
-        // ignore
+    // Reset streaming state
+    stopStreamPlayback();
+    streamSampleRate = meta.sampleRate;
+    streamChannels = meta.channels;
+    streamBitsPerSample = meta.bitsPerSample;
+    streamNextPlayTime = 0;
+    streamEnded = false;
+  } catch (err) {
+    console.error("Stream start error:", err);
+  }
+});
+
+window.piVoice.onPlayAudioStreamChunk((pcmData) => {
+  try {
+    if (!audioContext) {
+      audioContext = new AudioContext();
+    }
+
+    const raw = pcmData instanceof ArrayBuffer ? pcmData : new Uint8Array(pcmData as any).buffer;
+    const bytesPerSample = streamBitsPerSample / 8;
+    const sampleCount = raw.byteLength / bytesPerSample / streamChannels;
+
+    if (sampleCount <= 0) return;
+
+    // Create an AudioBuffer from raw PCM (16-bit signed LE)
+    const audioBuffer = audioContext.createBuffer(
+      streamChannels,
+      sampleCount,
+      streamSampleRate
+    );
+
+    const view = new DataView(raw);
+    for (let ch = 0; ch < streamChannels; ch++) {
+      const channelData = audioBuffer.getChannelData(ch);
+      for (let i = 0; i < sampleCount; i++) {
+        const byteOffset = (i * streamChannels + ch) * bytesPerSample;
+        const int16 = view.getInt16(byteOffset, true); // little-endian
+        channelData[i] = int16 / 32768;
       }
     }
 
-    const audioBuffer = await audioContext.decodeAudioData(
-      audioData instanceof ArrayBuffer ? audioData : new Uint8Array(audioData as any).buffer
-    );
     const source = audioContext.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioContext.destination);
 
-    source.onended = () => {
-      currentSource = null;
-      window.piVoice.sendPlaybackDone();
-    };
+    // Schedule playback at the end of the current queue
+    const now = audioContext.currentTime;
+    if (streamNextPlayTime < now) {
+      streamNextPlayTime = now;
+    }
 
-    currentSource = source;
-    source.start();
+    source.start(streamNextPlayTime);
+    streamNextPlayTime += audioBuffer.duration;
+
+    streamActiveSources++;
+    source.onended = () => {
+      streamActiveSources--;
+      if (streamEnded && streamActiveSources <= 0) {
+        window.piVoice.sendPlaybackDone();
+      }
+    };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("Playback error:", msg);
+    console.error("Stream chunk playback error:", err);
+  }
+});
+
+window.piVoice.onPlayAudioStreamEnd(() => {
+  streamEnded = true;
+  // If all sources already finished (or no chunks received), signal done now
+  if (streamActiveSources <= 0) {
     window.piVoice.sendPlaybackDone();
   }
 });

@@ -3,7 +3,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { FnHook } from "./services/fn-hook.js";
 import { transcribe } from "./services/stt.js";
-import { synthesize } from "./services/tts.js";
+import {
+  synthesizeStream,
+  TTS_SAMPLE_RATE,
+  TTS_CHANNELS,
+  TTS_BITS_PER_SAMPLE,
+} from "./services/tts.js";
 import * as piSession from "./services/pi-session.js";
 import { IPC, type AppState } from "./shared/types.js";
 
@@ -77,18 +82,27 @@ function setupIpcHandlers() {
         return;
       }
 
-      // Step 3: TTS
+      // Step 3: TTS (streaming)
       setState("speaking", "Generating speech...");
-      const audioData = await synthesize(response);
 
-      // Send audio to renderer for playback
-      mainWindow?.webContents.send(
-        IPC.PLAY_AUDIO,
-        audioData.buffer.slice(
-          audioData.byteOffset,
-          audioData.byteOffset + audioData.byteLength
-        )
-      );
+      // Signal renderer to prepare for streaming PCM playback
+      mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_START, {
+        sampleRate: TTS_SAMPLE_RATE,
+        channels: TTS_CHANNELS,
+        bitsPerSample: TTS_BITS_PER_SAMPLE,
+      });
+
+      for await (const pcmChunk of synthesizeStream(response)) {
+        mainWindow?.webContents.send(
+          IPC.PLAY_AUDIO_STREAM_CHUNK,
+          pcmChunk.buffer.slice(
+            pcmChunk.byteOffset,
+            pcmChunk.byteOffset + pcmChunk.byteLength
+          )
+        );
+      }
+
+      mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_END);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[Main] Pipeline error:", msg);

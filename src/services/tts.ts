@@ -13,14 +13,21 @@ function getClient(): GoogleGenAI {
   return ai;
 }
 
+/** Default audio parameters for Gemini TTS */
+export const TTS_SAMPLE_RATE = 24000;
+export const TTS_CHANNELS = 1;
+export const TTS_BITS_PER_SAMPLE = 16;
+
 /**
- * Convert text to speech using Gemini 2.5 Flash TTS on Vertex AI.
- * Returns WAV audio as a Buffer (24kHz, 16-bit PCM, mono).
+ * Convert text to speech using Gemini 2.5 Flash TTS on Vertex AI (streaming).
+ * Yields raw PCM chunks (24kHz, 16-bit, mono) as Buffers.
  */
-export async function synthesize(text: string): Promise<Buffer> {
+export async function* synthesizeStream(
+  text: string
+): AsyncGenerator<Buffer, void, undefined> {
   const client = getClient();
 
-  const response = await client.models.generateContent({
+  const response = await client.models.generateContentStream({
     model: "gemini-2.5-flash-preview-tts",
     contents: [
       {
@@ -40,60 +47,50 @@ export async function synthesize(text: string): Promise<Buffer> {
     },
   });
 
-  // Response contains audio as inline base64 data
-  const candidate = response.candidates?.[0];
-  const audioPart = candidate?.content?.parts?.find(
-    (p: any) => p.inlineData?.mimeType?.startsWith("audio/")
-  );
+  let totalBytes = 0;
+  // Carry over odd trailing byte for 16-bit alignment
+  let leftover: Buffer | null = null;
 
-  if (!audioPart?.inlineData?.data) {
-    throw new Error("No audio data in TTS response");
+  for await (const chunk of response) {
+    const candidate = chunk.candidates?.[0];
+    const parts = candidate?.content?.parts;
+    if (!parts) continue;
+
+    for (const part of parts) {
+      if (!part.inlineData?.data) continue;
+
+      let pcm = Buffer.from(part.inlineData.data, "base64");
+
+      // Prepend leftover byte from previous chunk if any
+      if (leftover) {
+        pcm = Buffer.concat([leftover, pcm]);
+        leftover = null;
+      }
+
+      // Ensure 16-bit (2-byte) alignment
+      const bytesPerSample = TTS_BITS_PER_SAMPLE / 8;
+      const remainder = pcm.length % bytesPerSample;
+      if (remainder !== 0) {
+        leftover = pcm.subarray(pcm.length - remainder);
+        pcm = pcm.subarray(0, pcm.length - remainder);
+      }
+
+      if (pcm.length > 0) {
+        totalBytes += pcm.length;
+        yield pcm;
+      }
+    }
   }
 
-  // Gemini TTS returns raw PCM (24kHz, 16-bit, mono) as base64
-  const pcmBuffer = Buffer.from(audioPart.inlineData.data, "base64");
-
-  // Wrap in WAV header for easy playback
-  const wavBuffer = wrapPcmInWav(pcmBuffer, 24000, 1, 16);
+  // Flush any remaining leftover (shouldn't happen with well-formed data)
+  if (leftover && leftover.length > 0) {
+    totalBytes += leftover.length;
+    yield leftover;
+  }
 
   console.log(
-    `[TTS] Generated ${wavBuffer.length} bytes of WAV audio for "${text.substring(0, 50)}..."`
+    `[TTS] Streamed ${totalBytes} bytes of PCM audio for "${text.substring(0, 50)}..."`
   );
-  return wavBuffer;
 }
 
-/** Create a WAV file from raw PCM data */
-function wrapPcmInWav(
-  pcm: Buffer,
-  sampleRate: number,
-  channels: number,
-  bitsPerSample: number
-): Buffer {
-  const byteRate = (sampleRate * channels * bitsPerSample) / 8;
-  const blockAlign = (channels * bitsPerSample) / 8;
-  const dataSize = pcm.length;
-  const headerSize = 44;
-  const buffer = Buffer.alloc(headerSize + dataSize);
 
-  // RIFF header
-  buffer.write("RIFF", 0);
-  buffer.writeUInt32LE(36 + dataSize, 4);
-  buffer.write("WAVE", 8);
-
-  // fmt chunk
-  buffer.write("fmt ", 12);
-  buffer.writeUInt32LE(16, 16); // chunk size
-  buffer.writeUInt16LE(1, 20); // PCM format
-  buffer.writeUInt16LE(channels, 22);
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(byteRate, 28);
-  buffer.writeUInt16LE(blockAlign, 32);
-  buffer.writeUInt16LE(bitsPerSample, 34);
-
-  // data chunk
-  buffer.write("data", 36);
-  buffer.writeUInt32LE(dataSize, 40);
-  pcm.copy(buffer, 44);
-
-  return buffer;
-}
