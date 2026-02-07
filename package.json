@@ -1,12 +1,33 @@
 {
   "name": "pi-voice",
-  "module": "index.ts",
+  "version": "0.1.0",
+  "main": "dist/main.js",
   "type": "module",
   "private": true,
+  "scripts": {
+    "build": "bun run build:main && bun run build:preload && bun run build:renderer && bun run build:copy",
+    "build:main": "bun build src/main.ts --outdir dist --target node --format esm --external electron --external iohook-macos",
+    "build:preload": "bun build src/preload.ts --outdir dist --target node --format cjs --external electron",
+    "build:renderer": "bun build src/renderer/renderer.ts --outdir dist/renderer --target browser --format esm",
+    "build:copy": "cp src/renderer/index.html dist/renderer/index.html",
+    "start": "bun run build && electron dist/main.js",
+    "dev": "bun run build && electron dist/main.js"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
-  }
+  },
+  "dependencies": {
+    "@google/genai": "^1.40.0",
+    "@mariozechner/pi-coding-agent": "^0.52.7",
+    "electron": "^40.2.1",
+    "iohook-macos": "^1.2.1"
+  },
+  "trustedDependencies": [
+    "electron",
+    "iohook-macos",
+    "protobufjs"
+  ]
 }

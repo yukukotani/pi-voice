@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; media-src blob:">
+  <title>pi-voice</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      user-select: none;
+      -webkit-app-region: drag;
+      overflow: hidden;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .indicator {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: #2a2a4a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .indicator::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      transition: all 0.3s ease;
+    }
+
+    /* State styles */
+    .state-idle .indicator {
+      background: #2a2a4a;
+    }
+
+    .state-recording .indicator {
+      background: #e74c3c;
+      box-shadow: 0 0 30px rgba(231, 76, 60, 0.5);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    .state-transcribing .indicator {
+      background: #f39c12;
+      animation: spin 1.5s linear infinite;
+    }
+
+    .state-thinking .indicator {
+      background: #3498db;
+      animation: think 2s ease-in-out infinite;
+    }
+
+    .state-speaking .indicator {
+      background: #2ecc71;
+      animation: speak 0.5s ease-in-out infinite alternate;
+    }
+
+    .state-error .indicator {
+      background: #c0392b;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes think {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    @keyframes speak {
+      from { transform: scale(1); }
+      to { transform: scale(1.05); }
+    }
+
+    .icon {
+      font-size: 48px;
+      line-height: 1;
+    }
+
+    .state-label {
+      font-size: 16px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .status-message {
+      font-size: 13px;
+      color: #888;
+      max-width: 300px;
+      text-align: center;
+      word-break: break-word;
+      min-height: 20px;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: #555;
+      position: fixed;
+      bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="app">
+    <div class="indicator" id="indicator">
+      <span class="icon" id="icon">&#x23F8;</span>
+    </div>
+    <div class="state-label" id="stateLabel">IDLE</div>
+    <div class="status-message" id="statusMessage">Hold Fn to speak</div>
+  </div>
+  <div class="hint">Fn key: push-to-talk</div>
+  <script src="./renderer.js"></script>
+</body>
+</html>
