@@ -73,33 +73,69 @@ function setupIpcHandlers() {
         return;
       }
 
-      // Step 2: Send to pi
+      // Step 2: Send to pi – start TTS as each text segment completes
       setState("thinking", `Sent: "${text}"`);
-      const response = await piSession.prompt(text);
+
+      let streamStarted = false;
+      // Chain of TTS promises to guarantee playback order
+      let ttsChain = Promise.resolve();
+
+      const response = await piSession.prompt(text, {
+        onTextEnd: (segment) => {
+          if (!segment.trim()) return;
+
+          // Switch to speaking state & send stream-start on first segment
+          if (!streamStarted) {
+            streamStarted = true;
+            setState("speaking", "Generating speech...");
+            mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_START, {
+              sampleRate: TTS_SAMPLE_RATE,
+              channels: TTS_CHANNELS,
+              bitsPerSample: TTS_BITS_PER_SAMPLE,
+            });
+          }
+
+          // Queue TTS for this segment (runs serially via chain)
+          ttsChain = ttsChain.then(async () => {
+            for await (const pcmChunk of synthesizeStream(segment)) {
+              mainWindow?.webContents.send(
+                IPC.PLAY_AUDIO_STREAM_CHUNK,
+                pcmChunk.buffer.slice(
+                  pcmChunk.byteOffset,
+                  pcmChunk.byteOffset + pcmChunk.byteLength
+                )
+              );
+            }
+          });
+        },
+      });
 
       if (!response) {
         setState("idle", "No response from pi");
         return;
       }
 
-      // Step 3: TTS (streaming)
-      setState("speaking", "Generating speech...");
+      // Fallback: if no text_end fired, speak the full response
+      if (!streamStarted) {
+        setState("speaking", "Generating speech...");
+        mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_START, {
+          sampleRate: TTS_SAMPLE_RATE,
+          channels: TTS_CHANNELS,
+          bitsPerSample: TTS_BITS_PER_SAMPLE,
+        });
 
-      // Signal renderer to prepare for streaming PCM playback
-      mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_START, {
-        sampleRate: TTS_SAMPLE_RATE,
-        channels: TTS_CHANNELS,
-        bitsPerSample: TTS_BITS_PER_SAMPLE,
-      });
-
-      for await (const pcmChunk of synthesizeStream(response)) {
-        mainWindow?.webContents.send(
-          IPC.PLAY_AUDIO_STREAM_CHUNK,
-          pcmChunk.buffer.slice(
-            pcmChunk.byteOffset,
-            pcmChunk.byteOffset + pcmChunk.byteLength
-          )
-        );
+        for await (const pcmChunk of synthesizeStream(response)) {
+          mainWindow?.webContents.send(
+            IPC.PLAY_AUDIO_STREAM_CHUNK,
+            pcmChunk.buffer.slice(
+              pcmChunk.byteOffset,
+              pcmChunk.byteOffset + pcmChunk.byteLength
+            )
+          );
+        }
+      } else {
+        // Wait for all queued TTS segments to finish
+        await ttsChain;
       }
 
       mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_END);

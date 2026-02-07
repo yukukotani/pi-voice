@@ -22,21 +22,32 @@ export async function getOrCreateSession(): Promise<AgentSession> {
   return session;
 }
 
+export interface PromptOptions {
+  /** Called each time a text block completes (text_end event). */
+  onTextEnd?: (segment: string) => void | Promise<void>;
+}
+
 /**
  * Send a prompt to pi and collect the full response text.
+ * If `onTextEnd` is provided, it is called for each completed text segment
+ * so callers can start TTS before the full response is ready.
  */
-export async function prompt(text: string): Promise<string> {
+export async function prompt(
+  text: string,
+  options?: PromptOptions
+): Promise<string> {
   const s = await getOrCreateSession();
 
   let responseText = "";
 
-  // Subscribe to collect text deltas
+  // Subscribe to collect text deltas and text_end events
   const unsubscribe = s.subscribe((event) => {
-    if (
-      event.type === "message_update" &&
-      event.assistantMessageEvent.type === "text_delta"
-    ) {
-      responseText += event.assistantMessageEvent.delta;
+    if (event.type === "message_update") {
+      if (event.assistantMessageEvent.type === "text_delta") {
+        responseText += event.assistantMessageEvent.delta;
+      } else if (event.assistantMessageEvent.type === "text_end") {
+        options?.onTextEnd?.(event.assistantMessageEvent.content);
+      }
     }
   });
 
