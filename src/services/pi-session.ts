@@ -28,36 +28,31 @@ export interface PromptOptions {
 }
 
 /**
- * Send a prompt to pi and collect the full response text.
- * If `onTextEnd` is provided, it is called for each completed text segment
- * so callers can start TTS before the full response is ready.
+ * Send a prompt to pi.
+ * `onTextEnd` is called for each completed text segment so callers can
+ * start TTS incrementally without waiting for the full response.
  */
 export async function prompt(
   text: string,
   options?: PromptOptions,
-): Promise<string> {
+): Promise<void> {
   const s = await getOrCreateSession();
 
-  let responseText = "";
-
-  // Subscribe to collect text deltas and text_end events
   const unsubscribe = s.subscribe((event) => {
-    if (event.type === "message_update") {
-      if (event.assistantMessageEvent.type === "text_delta") {
-        responseText += event.assistantMessageEvent.delta;
-      } else if (event.assistantMessageEvent.type === "text_end") {
-        const content = event.assistantMessageEvent.content.trim();
-        if (content.length > 0) {
-          console.log(`[PiSession] Response: ${content}`);
-          options?.onTextEnd?.(content);
-        }
+    if (
+      event.type === "message_update" &&
+      event.assistantMessageEvent.type === "text_end"
+    ) {
+      const content = event.assistantMessageEvent.content.trim();
+      if (content.length > 0) {
+        console.log(`[PiSession] Response: ${content}`);
+        options?.onTextEnd?.(content);
       }
     }
   });
 
   try {
     await s.prompt(text);
-    return responseText.trim();
   } finally {
     unsubscribe();
   }

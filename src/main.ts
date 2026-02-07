@@ -80,10 +80,8 @@ function setupIpcHandlers() {
       // Chain of TTS promises to guarantee playback order
       let ttsChain = Promise.resolve();
 
-      const response = await piSession.prompt(text, {
+      await piSession.prompt(text, {
         onTextEnd: (segment) => {
-          if (!segment.trim()) return;
-
           // Switch to speaking state & send stream-start on first segment
           if (!streamStarted) {
             streamStarted = true;
@@ -110,35 +108,14 @@ function setupIpcHandlers() {
         },
       });
 
-      if (!response) {
-        setState("idle", "No response from pi");
-        return;
-      }
+      // Wait for all queued TTS segments to finish
+      await ttsChain;
 
-      // Fallback: if no text_end fired, speak the full response
-      if (!streamStarted) {
-        setState("speaking", "Generating speech...");
-        mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_START, {
-          sampleRate: TTS_SAMPLE_RATE,
-          channels: TTS_CHANNELS,
-          bitsPerSample: TTS_BITS_PER_SAMPLE,
-        });
-
-        for await (const pcmChunk of synthesizeStream(response)) {
-          mainWindow?.webContents.send(
-            IPC.PLAY_AUDIO_STREAM_CHUNK,
-            pcmChunk.buffer.slice(
-              pcmChunk.byteOffset,
-              pcmChunk.byteOffset + pcmChunk.byteLength
-            )
-          );
-        }
+      if (streamStarted) {
+        mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_END);
       } else {
-        // Wait for all queued TTS segments to finish
-        await ttsChain;
+        setState("idle", "No response from pi");
       }
-
-      mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_END);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[Main] Pipeline error:", msg);
