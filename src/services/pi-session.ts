@@ -34,7 +34,7 @@ export interface PromptOptions {
  */
 export async function prompt(
   text: string,
-  options?: PromptOptions
+  options?: PromptOptions,
 ): Promise<string> {
   const s = await getOrCreateSession();
 
@@ -46,7 +46,10 @@ export async function prompt(
       if (event.assistantMessageEvent.type === "text_delta") {
         responseText += event.assistantMessageEvent.delta;
       } else if (event.assistantMessageEvent.type === "text_end") {
-        options?.onTextEnd?.(event.assistantMessageEvent.content);
+        const content = event.assistantMessageEvent.content.trim();
+        if (content.length > 0) {
+          options?.onTextEnd?.(event.assistantMessageEvent.content);
+        }
       }
     }
   });
