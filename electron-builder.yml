@@ -14,7 +14,7 @@ files:
   - '!bin/*'
   - '!src/cli.ts'
 asarUnpack:
-  - node_modules/iohook-macos/**
+  - node_modules/uiohook-napi/**
   - out/main/chunks/*.node
 mac:
   category: public.app-category.utilities
@@ -31,7 +31,7 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     NSMicrophoneUsageDescription: "This app requires microphone access for voice input."
-    NSAppleEventsUsageDescription: "This app requires accessibility permissions to detect Fn key."
+    NSAppleEventsUsageDescription: "This app requires accessibility permissions to detect global keyboard shortcuts."
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
 npmRebuild: false

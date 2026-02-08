@@ -23,7 +23,7 @@ const stateConfig: Record<
   string,
   { icon: string; label: string; defaultMessage: string }
 > = {
-  idle: { icon: "\u23F8", label: "IDLE", defaultMessage: "Hold Fn to speak" },
+  idle: { icon: "\u23F8", label: "IDLE", defaultMessage: "Hold \u2318+Shift+I to speak" },
   recording: {
     icon: "\u{1F534}",
     label: "RECORDING",

@@ -194,7 +194,7 @@ function setupFnHook() {
     onFnDown: () => {
       if (currentState !== "idle") {
         console.log(
-          `[Main] Fn pressed but state is ${currentState}, ignoring`
+          `[Main] Meta+Shift+I pressed but state is ${currentState}, ignoring`
         );
         return;
       }

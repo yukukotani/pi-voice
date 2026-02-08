@@ -1,16 +1,21 @@
-import iohook from "iohook-macos";
+import { uIOhook, UiohookKey } from "uiohook-napi";
+import type { UiohookKeyboardEvent } from "uiohook-napi";
+import { systemPreferences } from "electron";
 
 export type FnHookCallbacks = {
   onFnDown: () => void;
   onFnUp: () => void;
 };
 
+// The "I" key code in uiohook-napi
+const KEY_I = UiohookKey.I;
+
 /**
- * Monitors the Fn key globally using iohook-macos.
- * Detects Fn press/release via flagsChanged events and modifier state.
+ * Monitors Meta+Shift+I globally using uiohook-napi.
+ * Triggers onFnDown when all three keys are held, onFnUp when any is released.
  */
 export class FnHook {
-  private fnDown = false;
+  private active = false;
   private callbacks: FnHookCallbacks;
   private started = false;
 
@@ -21,53 +26,57 @@ export class FnHook {
   start(): void {
     if (this.started) return;
 
-    const perms = iohook.checkAccessibilityPermissions();
-    if (!perms.hasPermissions) {
-      console.log(
-        "[FnHook] Accessibility permissions not granted. Requesting..."
-      );
-      iohook.requestAccessibilityPermissions();
-      throw new Error(
-        "Accessibility permissions required. Please grant access in System Preferences > Privacy & Security > Accessibility, then restart the app."
-      );
+    // macOS requires accessibility permissions for global keyboard hooks
+    if (process.platform === "darwin") {
+      const trusted = systemPreferences.isTrustedAccessibilityClient(true);
+      if (!trusted) {
+        throw new Error(
+          "Accessibility permissions required. Please grant access in System Preferences > Privacy & Security > Accessibility, then restart the app."
+        );
+      }
     }
 
-    // Only listen to keyboard events (flagsChanged is type 12)
-    iohook.setEventFilter({
-      filterByEventType: true,
-      allowKeyboard: true,
-      allowMouse: false,
-      allowScroll: false,
+    uIOhook.on("keydown", (e: UiohookKeyboardEvent) => {
+      if (this.active) return; // already recording, ignore repeats
+
+      // Check: Meta (left or right) + Shift (left or right) + I
+      if (e.metaKey && e.shiftKey && e.keycode === KEY_I) {
+        this.active = true;
+        this.callbacks.onFnDown();
+      }
     });
 
-    iohook.enablePerformanceMode();
+    uIOhook.on("keyup", (e: UiohookKeyboardEvent) => {
+      if (!this.active) return;
 
-    // flagsChanged fires when any modifier key state changes (including Fn)
-    iohook.on("flagsChanged", (event) => {
-      const fnNow = event.modifiers.fn;
-      if (fnNow && !this.fnDown) {
-        this.fnDown = true;
-        this.callbacks.onFnDown();
-      } else if (!fnNow && this.fnDown) {
-        this.fnDown = false;
+      // Release when any of the three keys is lifted
+      const isRelevantKey =
+        e.keycode === KEY_I ||
+        e.keycode === UiohookKey.Meta ||
+        e.keycode === UiohookKey.MetaRight ||
+        e.keycode === UiohookKey.Shift ||
+        e.keycode === UiohookKey.ShiftRight;
+
+      if (isRelevantKey) {
+        this.active = false;
         this.callbacks.onFnUp();
       }
     });
 
-    iohook.startMonitoring();
+    uIOhook.start();
     this.started = true;
-    console.log("[FnHook] Started monitoring Fn key");
+    console.log("[FnHook] Started monitoring Meta+Shift+I");
   }
 
   stop(): void {
     if (!this.started) return;
-    iohook.stopMonitoring();
+    uIOhook.stop();
     this.started = false;
-    this.fnDown = false;
+    this.active = false;
     console.log("[FnHook] Stopped monitoring");
   }
 
   get isFnDown(): boolean {
-    return this.fnDown;
+    return this.active;
   }
 }

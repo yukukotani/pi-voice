@@ -24,14 +24,15 @@ pi-voice status
 # ウィンドウを表示
 pi-voice show
 
-# daemon を停止（Fn キーも無効化）
+# daemon を停止（ショートカットキーも無効化）
 pi-voice stop
 ```
 
 - `start` は引数なしのデフォルトコマンドです。既に起動中ならエラーで終了します。
 - `start` は事前に `bun run build` が必要です（`out/main/index.js` がなければエラー）。
+- 録音トリガーは `Cmd+Shift+I`（macOS）/ `Win+Shift+I`（Windows）の押下中です。
 - ウィンドウを閉じても daemon はバックグラウンドで動作し続けます。完全に停止するには `stop` か Cmd+Q を使ってください。
-- 実行状態は `~/.pi-voice/runtime-state.json`、制御 socket は `~/.pi-voice/daemon.sock` に配置されます。
+- 実行状態は `~/.pi-voice/runtime-state.json`、制御ソケットは `~/.pi-voice/daemon.sock`（macOS/Linux）または named pipe（Windows）に配置されます。
 
 ### 開発モード
 
