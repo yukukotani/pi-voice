@@ -1,26 +1,53 @@
 import { uIOhook, UiohookKey } from "uiohook-napi";
 import type { UiohookKeyboardEvent } from "uiohook-napi";
 import { systemPreferences } from "electron";
+import type { KeyBinding } from "./config.js";
 
 export type FnHookCallbacks = {
   onFnDown: () => void;
   onFnUp: () => void;
 };
 
-// The "I" key code in uiohook-napi
-const KEY_I = UiohookKey.I;
+/**
+ * Resolve which UiohookKey codes should trigger "release" for a given modifier/key.
+ * Returns an array because left/right variants both count.
+ */
+function getReleaseCodes(binding: KeyBinding): number[] {
+  const codes: number[] = [binding.keycode];
+
+  if (binding.ctrl) {
+    codes.push(UiohookKey.Ctrl, UiohookKey.CtrlRight);
+  }
+  if (binding.shift) {
+    codes.push(UiohookKey.Shift, UiohookKey.ShiftRight);
+  }
+  if (binding.alt) {
+    codes.push(UiohookKey.Alt, UiohookKey.AltRight);
+  }
+  if (binding.meta) {
+    codes.push(UiohookKey.Meta, UiohookKey.MetaRight);
+  }
+
+  return codes;
+}
 
 /**
- * Monitors Meta+Shift+I globally using uiohook-napi.
- * Triggers onFnDown when all three keys are held, onFnUp when any is released.
+ * Monitors a configurable key combination globally using uiohook-napi.
+ * Triggers onFnDown when all keys are held, onFnUp when any is released.
  */
 export class FnHook {
   private active = false;
   private callbacks: FnHookCallbacks;
   private started = false;
+  private binding: KeyBinding;
+  private releaseCodes: Set<number>;
+  private displayName: string;
 
-  constructor(callbacks: FnHookCallbacks) {
+  constructor(callbacks: FnHookCallbacks, binding: KeyBinding, displayName: string) {
     this.callbacks = callbacks;
+    this.binding = binding;
+    this.releaseCodes = new Set(getReleaseCodes(binding));
+    this.displayName = displayName;
   }
 
   start(): void {
@@ -39,8 +66,14 @@ export class FnHook {
     uIOhook.on("keydown", (e: UiohookKeyboardEvent) => {
       if (this.active) return; // already recording, ignore repeats
 
-      // Check: Meta (left or right) + Shift (left or right) + I
-      if (e.metaKey && e.shiftKey && e.keycode === KEY_I) {
+      // Check: required modifiers + main key
+      if (
+        e.keycode === this.binding.keycode &&
+        e.ctrlKey === this.binding.ctrl &&
+        e.shiftKey === this.binding.shift &&
+        e.altKey === this.binding.alt &&
+        e.metaKey === this.binding.meta
+      ) {
         this.active = true;
         this.callbacks.onFnDown();
       }
@@ -49,15 +82,8 @@ export class FnHook {
     uIOhook.on("keyup", (e: UiohookKeyboardEvent) => {
       if (!this.active) return;
 
-      // Release when any of the three keys is lifted
-      const isRelevantKey =
-        e.keycode === KEY_I ||
-        e.keycode === UiohookKey.Meta ||
-        e.keycode === UiohookKey.MetaRight ||
-        e.keycode === UiohookKey.Shift ||
-        e.keycode === UiohookKey.ShiftRight;
-
-      if (isRelevantKey) {
+      // Release when any of the bound keys is lifted
+      if (this.releaseCodes.has(e.keycode)) {
         this.active = false;
         this.callbacks.onFnUp();
       }
@@ -65,7 +91,7 @@ export class FnHook {
 
     uIOhook.start();
     this.started = true;
-    console.log("[FnHook] Started monitoring Meta+Shift+I");
+    console.log(`[FnHook] Started monitoring ${this.displayName}`);
   }
 
   stop(): void {

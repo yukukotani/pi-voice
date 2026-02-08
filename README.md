@@ -30,9 +30,29 @@ pi-voice stop
 
 - `start` は引数なしのデフォルトコマンドです。既に起動中ならエラーで終了します。
 - `start` は事前に `bun run build` が必要です（`out/main/index.js` がなければエラー）。
-- 録音トリガーは `Cmd+Shift+I`（macOS）/ `Win+Shift+I`（Windows）の押下中です。
+- 録音トリガーはデフォルトで `Cmd+Shift+I`（macOS）/ `Win+Shift+I`（Windows）の押下中です。キーバインドは `.pi/pi-voice.json` で変更できます（後述）。
 - ウィンドウを閉じても daemon はバックグラウンドで動作し続けます。完全に停止するには `stop` か Cmd+Q を使ってください。
 - 実行状態は `~/.pi-voice/runtime-state.json`、制御ソケットは `~/.pi-voice/daemon.sock`（macOS/Linux）または named pipe（Windows）に配置されます。
+
+### キーバインド設定
+
+`pi-voice start` を実行するディレクトリ（`cwd`）に `.pi/pi-voice.json` を配置すると、push-to-talk のキーバインドを変更できます。
+
+```json
+{
+  "key": "ctrl+t"
+}
+```
+
+`key` には `ctrl`, `shift`, `alt`/`opt`, `meta`/`cmd` の修飾キーと、メインキー（`a`-`z`, `0`-`9`, `f1`-`f12`, `space`, `escape` など）を `+` で繋いで指定します。
+
+設定例:
+- `"ctrl+t"` — Ctrl+T
+- `"meta+shift+i"` — Cmd+Shift+I（デフォルト）
+- `"alt+space"` — Alt+Space
+- `"ctrl+shift+r"` — Ctrl+Shift+R
+
+設定ファイルがない場合は `meta+shift+i` が使用されます。
 
 ### 開発モード
 

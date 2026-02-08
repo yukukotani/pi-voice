@@ -17,6 +17,7 @@ export const IPC = {
   PLAY_AUDIO_STREAM_END: "play-audio-stream-end",
   STATE_CHANGED: "state-changed",
   STATUS_MESSAGE: "status-message",
+  KEY_DISPLAY: "key-display",
 
   // renderer -> main
   RECORDING_DATA: "recording-data",
@@ -40,6 +41,7 @@ export interface PiVoiceAPI {
   onPlayAudioStreamEnd: (callback: () => void) => void;
   onStateChanged: (callback: (state: AppState) => void) => void;
   onStatusMessage: (callback: (message: string) => void) => void;
+  onKeyDisplay: (callback: (keyDisplay: string) => void) => void;
   sendRecordingData: (data: ArrayBuffer) => void;
   sendRecordingError: (error: string) => void;
   sendPlaybackDone: () => void;

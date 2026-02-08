@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, session } from "electron";
 import { fileURLToPath } from "node:url";
 import { FnHook } from "./services/fn-hook.js";
+import { loadConfig } from "./services/config.js";
 import { transcribe } from "./services/stt.js";
 import {
   synthesizeStream,
@@ -29,6 +30,7 @@ let mainWindow: BrowserWindow | null = null;
 let fnHook: FnHook | null = null;
 let currentState: AppState = "idle";
 let forceQuit = false;
+let configKeyDisplay: string = "";
 
 // Tell pi-session to use the caller's cwd
 piSession.setSessionCwd(workingCwd);
@@ -69,6 +71,13 @@ function createWindow() {
       )
     );
   }
+
+  // Send key display name to renderer once loaded
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (configKeyDisplay) {
+      mainWindow?.webContents.send(IPC.KEY_DISPLAY, configKeyDisplay);
+    }
+  });
 
   // Hide on close instead of destroying – keeps daemon running in background
   mainWindow.on("close", (e) => {
@@ -190,23 +199,30 @@ function setupIpcHandlers() {
 }
 
 function setupFnHook() {
-  fnHook = new FnHook({
-    onFnDown: () => {
-      if (currentState !== "idle") {
-        console.log(
-          `[Main] Meta+Shift+I pressed but state is ${currentState}, ignoring`
-        );
-        return;
-      }
-      setState("recording", "Recording...");
-      mainWindow?.webContents.send(IPC.START_RECORDING);
+  const config = loadConfig(workingCwd);
+  configKeyDisplay = config.keyDisplay;
+
+  fnHook = new FnHook(
+    {
+      onFnDown: () => {
+        if (currentState !== "idle") {
+          console.log(
+            `[Main] ${config.keyDisplay} pressed but state is ${currentState}, ignoring`
+          );
+          return;
+        }
+        setState("recording", "Recording...");
+        mainWindow?.webContents.send(IPC.START_RECORDING);
+      },
+      onFnUp: () => {
+        if (currentState !== "recording") return;
+        mainWindow?.webContents.send(IPC.STOP_RECORDING);
+        // State will transition when recording data arrives via IPC
+      },
     },
-    onFnUp: () => {
-      if (currentState !== "recording") return;
-      mainWindow?.webContents.send(IPC.STOP_RECORDING);
-      // State will transition when recording data arrives via IPC
-    },
-  });
+    config.key,
+    config.keyDisplay,
+  );
 
   try {
     fnHook.start();

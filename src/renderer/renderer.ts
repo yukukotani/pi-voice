@@ -19,33 +19,37 @@ function playSoundEffect(url: string) {
   });
 }
 
-const stateConfig: Record<
+let keyDisplayName = "\u2318+Shift+I"; // default, updated from main process
+
+function getStateConfig(): Record<
   string,
   { icon: string; label: string; defaultMessage: string }
-> = {
-  idle: { icon: "\u23F8", label: "IDLE", defaultMessage: "Hold \u2318+Shift+I to speak" },
-  recording: {
-    icon: "\u{1F534}",
-    label: "RECORDING",
-    defaultMessage: "Listening...",
-  },
-  transcribing: {
-    icon: "\u{1F504}",
-    label: "TRANSCRIBING",
-    defaultMessage: "Converting speech to text...",
-  },
-  thinking: {
-    icon: "\u{1F9E0}",
-    label: "THINKING",
-    defaultMessage: "pi is thinking...",
-  },
-  speaking: {
-    icon: "\u{1F50A}",
-    label: "SPEAKING",
-    defaultMessage: "Playing response...",
-  },
-  error: { icon: "\u26A0", label: "ERROR", defaultMessage: "An error occurred" },
-};
+> {
+  return {
+    idle: { icon: "\u23F8", label: "IDLE", defaultMessage: `Hold ${keyDisplayName} to speak` },
+    recording: {
+      icon: "\u{1F534}",
+      label: "RECORDING",
+      defaultMessage: "Listening...",
+    },
+    transcribing: {
+      icon: "\u{1F504}",
+      label: "TRANSCRIBING",
+      defaultMessage: "Converting speech to text...",
+    },
+    thinking: {
+      icon: "\u{1F9E0}",
+      label: "THINKING",
+      defaultMessage: "pi is thinking...",
+    },
+    speaking: {
+      icon: "\u{1F50A}",
+      label: "SPEAKING",
+      defaultMessage: "Playing response...",
+    },
+    error: { icon: "\u26A0", label: "ERROR", defaultMessage: "An error occurred" },
+  };
+}
 
 // State updates from main
 window.piVoice.onStateChanged((state) => {
@@ -53,16 +57,31 @@ window.piVoice.onStateChanged((state) => {
   document.body.className = "";
   document.body.classList.add(`state-${state}`);
 
-  const config = stateConfig[state];
-  if (config) {
-    icon.textContent = config.icon;
-    stateLabel.textContent = config.label;
-    statusMessage.textContent = config.defaultMessage;
+  const sc = getStateConfig()[state];
+  if (sc) {
+    icon.textContent = sc.icon;
+    stateLabel.textContent = sc.label;
+    statusMessage.textContent = sc.defaultMessage;
   }
 });
 
 window.piVoice.onStatusMessage((message) => {
   statusMessage.textContent = message;
+});
+
+// Update key display name from config
+const hintEl = document.querySelector(".hint") as HTMLElement | null;
+
+window.piVoice.onKeyDisplay((display) => {
+  keyDisplayName = display;
+  // Update hint text
+  if (hintEl) {
+    hintEl.textContent = `${display}: push-to-talk`;
+  }
+  // Update idle message if currently idle
+  if (document.body.classList.contains("state-idle")) {
+    statusMessage.textContent = `Hold ${display} to speak`;
+  }
 });
 
 // Recording control from main
