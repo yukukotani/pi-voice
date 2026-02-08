@@ -11,6 +11,8 @@ files:
   - '!{.env,.env.*,.npmrc,bun.lock}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!{CLAUDE.md,index.ts}'
+  - '!bin/*'
+  - '!src/cli.ts'
 asarUnpack:
   - node_modules/iohook-macos/**
   - out/main/chunks/*.node

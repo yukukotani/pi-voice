@@ -1,6 +1,12 @@
-import { app } from "electron";
 import { join } from "node:path";
-import { readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
+import {
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  existsSync,
+  mkdirSync,
+} from "node:fs";
 
 export interface RuntimeState {
   pid: number;
@@ -8,12 +14,16 @@ export interface RuntimeState {
   startedAt: string; // ISO 8601
 }
 
+const STATE_DIR = join(homedir(), ".pi-voice");
+const STATE_FILE = join(STATE_DIR, "runtime-state.json");
+
 /**
- * Returns the path to the runtime state file.
- * Uses Electron's userData directory so it's consistent across invocations.
+ * Ensure the state directory exists.
  */
-function stateFilePath(): string {
-  return join(app.getPath("userData"), "runtime-state.json");
+function ensureDir(): void {
+  if (!existsSync(STATE_DIR)) {
+    mkdirSync(STATE_DIR, { recursive: true });
+  }
 }
 
 /**
@@ -32,12 +42,13 @@ function isProcessAlive(pid: number): boolean {
  * Save runtime state to disk (called on successful start).
  */
 export function saveRuntimeState(cwd: string): void {
+  ensureDir();
   const state: RuntimeState = {
     pid: process.pid,
     cwd,
     startedAt: new Date().toISOString(),
   };
-  writeFileSync(stateFilePath(), JSON.stringify(state, null, 2));
+  writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
 /**
@@ -45,23 +56,22 @@ export function saveRuntimeState(cwd: string): void {
  * (missing file, stale PID, etc.).
  */
 export function readRuntimeState(): RuntimeState | null {
-  const path = stateFilePath();
-  if (!existsSync(path)) return null;
+  if (!existsSync(STATE_FILE)) return null;
 
   try {
-    const raw = readFileSync(path, "utf-8");
+    const raw = readFileSync(STATE_FILE, "utf-8");
     const state: RuntimeState = JSON.parse(raw);
 
     // Validate PID is still alive
     if (!isProcessAlive(state.pid)) {
-      // Stale file – clean up
+      // Stale file - clean up
       removeRuntimeState();
       return null;
     }
 
     return state;
   } catch {
-    // Corrupt file – clean up
+    // Corrupt file - clean up
     removeRuntimeState();
     return null;
   }
@@ -71,10 +81,9 @@ export function readRuntimeState(): RuntimeState | null {
  * Remove runtime state file (called on graceful shutdown).
  */
 export function removeRuntimeState(): void {
-  const path = stateFilePath();
   try {
-    if (existsSync(path)) unlinkSync(path);
+    if (existsSync(STATE_FILE)) unlinkSync(STATE_FILE);
   } catch {
-    // Ignore – best effort
+    // Ignore - best effort
   }
 }

@@ -6,7 +6,11 @@
   "main": "./out/main/index.js",
   "type": "module",
   "private": true,
+  "bin": {
+    "pi-voice": "./bin/pi-voice"
+  },
   "scripts": {
+    "cli": "bun src/cli.ts",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
