@@ -5,6 +5,15 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 let session: AgentSession | null = null;
+let sessionCwd: string = process.cwd();
+
+/**
+ * Set the working directory used when creating the agent session.
+ * Must be called before the first getOrCreateSession() call.
+ */
+export function setSessionCwd(cwd: string): void {
+  sessionCwd = cwd;
+}
 
 /**
  * Initialize (or reuse) a pi coding agent session.
@@ -13,8 +22,9 @@ let session: AgentSession | null = null;
 export async function getOrCreateSession(): Promise<AgentSession> {
   if (session) return session;
 
-  console.log("[PiSession] Creating new agent session...");
+  console.log(`[PiSession] Creating new agent session (cwd: ${sessionCwd})...`);
   const result = await createAgentSession({
+    cwd: sessionCwd,
     sessionManager: SessionManager.inMemory(),
   });
   session = result.session;
