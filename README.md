@@ -36,10 +36,16 @@ pi-voice stop
 ### 開発モード
 
 ```bash
-bun run dev
+bun run dev:electron
 ```
 
 HMR 付きの Vite dev server で renderer を配信しつつ Electron を起動します（開発時はウィンドウを閉じると終了します）。
+
+CLI 単体で実行する場合:
+
+```bash
+bun run dev:cli
+```
 
 ## Build
 

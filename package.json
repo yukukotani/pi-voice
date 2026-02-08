@@ -16,8 +16,10 @@
   ],
   "scripts": {
     "cli": "bun src/cli.ts",
-    "dev": "electron-vite dev",
-    "build": "electron-vite build && bun run build:cli",
+    "dev:electron": "electron-vite dev",
+    "dev:cli": "bun src/cli.ts",
+    "build": "bun run build:electron && bun run build:cli",
+    "build:electron": "electron-vite build",
     "build:cli": "bun build src/cli.ts --outdir out/cli --target node --format esm --external electron",
     "preview": "electron-vite preview",
     "prepack": "bun run build",
