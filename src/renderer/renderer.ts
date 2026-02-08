@@ -13,10 +13,24 @@ let audioChunks: Blob[] = [];
 let audioContext: AudioContext | null = null;
 
 function playSoundEffect(url: string) {
-  const audio = new Audio(url);
-  audio.play().catch((err) => {
-    console.error("Failed to play sound effect:", err);
-  });
+  const ctx = audioContext ?? new AudioContext();
+  if (!audioContext) audioContext = ctx;
+
+  fetch(url)
+    .then((res) => res.arrayBuffer())
+    .then((buf) => ctx.decodeAudioData(buf))
+    .then((decoded) => {
+      const source = ctx.createBufferSource();
+      source.buffer = decoded;
+      const gain = ctx.createGain();
+      gain.gain.value = 2.0;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.start();
+    })
+    .catch((err) => {
+      console.error("Failed to play sound effect:", err);
+    });
 }
 
 let keyDisplayName = "\u2318+Shift+I"; // default, updated from main process
