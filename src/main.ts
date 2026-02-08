@@ -14,6 +14,12 @@ import {
   saveRuntimeState,
   removeRuntimeState,
 } from "./services/runtime-state.js";
+import {
+  startDaemonServer,
+  stopDaemonServer,
+  type DaemonCommand,
+  type DaemonResponse,
+} from "./services/daemon-ipc.js";
 
 // ── Resolve working directory ───────────────────────────────────────
 // CLI passes the caller's cwd via PI_VOICE_CWD env variable.
@@ -43,6 +49,8 @@ function createWindow() {
     resizable: true,
     alwaysOnTop: true,
     titleBarStyle: "hiddenInset",
+    // Daemon-first: window starts hidden
+    show: false,
     webPreferences: {
       preload: fileURLToPath(
         new URL("../preload/index.cjs", import.meta.url)
@@ -62,7 +70,7 @@ function createWindow() {
     );
   }
 
-  // Hide on close instead of destroying – keeps app running in background
+  // Hide on close instead of destroying – keeps daemon running in background
   mainWindow.on("close", (e) => {
     if (!forceQuit) {
       e.preventDefault();
@@ -81,6 +89,10 @@ function showWindow() {
     mainWindow.focus();
   } else {
     createWindow();
+    mainWindow!.once("ready-to-show", () => {
+      mainWindow!.show();
+      mainWindow!.focus();
+    });
   }
 }
 
@@ -222,26 +234,64 @@ function setupCsp() {
   );
 }
 
+// ── Daemon IPC command handler ──────────────────────────────────────
+
+function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
+  switch (command) {
+    case "status":
+      return {
+        ok: true,
+        state: currentState,
+        cwd: workingCwd,
+        pid: process.pid,
+        uptime: process.uptime(),
+      };
+
+    case "show":
+      showWindow();
+      return { ok: true };
+
+    case "stop":
+      // Schedule quit after responding
+      setImmediate(() => {
+        forceQuit = true;
+        app.quit();
+      });
+      return { ok: true };
+
+    default:
+      return { ok: false, error: `Unknown command: ${command}` };
+  }
+}
+
+// ── Graceful shutdown ───────────────────────────────────────────────
+
 function gracefulShutdown() {
   console.log("[Main] Shutting down...");
   fnHook?.stop();
   piSession.dispose();
+  stopDaemonServer();
   removeRuntimeState();
 }
 
-// ── Signal handlers (from CLI) ──────────────────────────────────────
-// SIGTERM = stop command
+// ── Signal handlers (legacy – kept for direct kill signals) ─────────
 process.on("SIGTERM", () => {
   gracefulShutdown();
   forceQuit = true;
   app.quit();
 });
 
-// SIGUSR1 = show command
-process.on("SIGUSR1", () => {
-  console.log("[Main] Received SIGUSR1, showing window...");
-  showWindow();
-});
+// ── Single instance lock ────────────────────────────────────────────
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  console.log("[Main] Another instance is already running. Exiting.");
+  app.quit();
+} else {
+  // When a second instance is launched, show the existing window
+  app.on("second-instance", () => {
+    showWindow();
+  });
+}
 
 // ── App lifecycle ───────────────────────────────────────────────────
 app.whenReady().then(() => {
@@ -249,13 +299,17 @@ app.whenReady().then(() => {
   createWindow();
   setupIpcHandlers();
   setupFnHook();
+
+  // Start daemon IPC server
+  startDaemonServer(handleDaemonCommand);
+
   saveRuntimeState(workingCwd);
-  console.log(`[Main] pi-voice started (cwd: ${workingCwd})`);
+  console.log(`[Main] pi-voice daemon started (cwd: ${workingCwd})`);
 });
 
 // On macOS, don't quit when all windows are closed – stay in background
 app.on("window-all-closed", () => {
-  // Do nothing – keep running
+  // Do nothing – keep daemon running
 });
 
 app.on("activate", () => {

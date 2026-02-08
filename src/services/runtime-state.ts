@@ -16,6 +16,15 @@ export interface RuntimeState {
 
 const STATE_DIR = join(homedir(), ".pi-voice");
 const STATE_FILE = join(STATE_DIR, "runtime-state.json");
+const SOCKET_FILE = join(STATE_DIR, "daemon.sock");
+
+/**
+ * Return the path to the daemon Unix domain socket.
+ */
+export function getSocketPath(): string {
+  ensureDir();
+  return SOCKET_FILE;
+}
 
 /**
  * Ensure the state directory exists.

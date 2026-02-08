@@ -2,6 +2,7 @@
 /**
  * Lightweight CLI for pi-voice.
  * Runs without Electron – only `start` spawns the Electron daemon.
+ * All other commands talk to the running daemon via Unix socket.
  */
 
 import { resolve, join } from "node:path";
@@ -11,6 +12,7 @@ import {
   readRuntimeState,
   removeRuntimeState,
 } from "./services/runtime-state.js";
+import { sendCommand } from "./services/daemon-ipc.js";
 
 type Command = "start" | "status" | "stop" | "show";
 
@@ -18,9 +20,9 @@ function usage(): never {
   console.log(`Usage: pi-voice <command>
 
 Commands:
-  start   Start pi-voice in the current directory (default)
-  status  Show whether pi-voice is running and where
-  stop    Stop the running instance
+  start   Start the pi-voice daemon in the background (default)
+  status  Show daemon status (state, PID, uptime)
+  stop    Stop the running daemon
   show    Bring the window to front`);
   process.exit(0);
 }
@@ -36,59 +38,114 @@ function parseCommand(): Command {
   usage();
 }
 
+// ── Helpers ─────────────────────────────────────────────────────────
+
+/** Check if the daemon appears to be running (PID file + process alive). */
+function isDaemonRunning(): boolean {
+  return readRuntimeState() !== null;
+}
+
+/** Pretty-print an error when daemon is not reachable. */
+function dieNotRunning(): never {
+  console.error("pi-voice daemon is not running. Use 'pi-voice start' first.");
+  process.exit(1);
+}
+
 // ── status ──────────────────────────────────────────────────────────
-function cmdStatus(): void {
+async function cmdStatus(): Promise<void> {
   const state = readRuntimeState();
-  if (state) {
-    console.log(
-      `running: ${state.cwd} (pid: ${state.pid}, since: ${state.startedAt})`
-    );
-  } else {
+  if (!state) {
     console.log("not running");
+    return;
+  }
+
+  try {
+    const res = await sendCommand("status");
+    if (res.ok) {
+      const uptime = typeof res.uptime === "number" ? Math.floor(res.uptime as number) : "?";
+      console.log(
+        `running: ${res.cwd} (pid: ${res.pid}, state: ${res.state}, uptime: ${uptime}s)`
+      );
+    } else {
+      console.log(
+        `running: ${state.cwd} (pid: ${state.pid}, since: ${state.startedAt})`
+      );
+      console.log(`  (daemon responded with error: ${res.error})`);
+    }
+  } catch {
+    // Socket not reachable but PID file exists – stale state
+    removeRuntimeState();
+    console.log("not running (stale state cleaned up)");
   }
 }
 
 // ── stop ────────────────────────────────────────────────────────────
-function cmdStop(): void {
-  const state = readRuntimeState();
-  if (!state) {
-    console.log("pi-voice is not running.");
+async function cmdStop(): Promise<void> {
+  if (!isDaemonRunning()) {
+    console.log("pi-voice daemon is not running.");
     process.exit(1);
   }
+
   try {
-    process.kill(state.pid, "SIGTERM");
-    console.log(`Stopping pi-voice (pid: ${state.pid})...`);
+    const res = await sendCommand("stop");
+    if (res.ok) {
+      console.log("Stopping pi-voice daemon...");
+    } else {
+      console.error(`Failed to stop daemon: ${res.error}`);
+      process.exit(1);
+    }
   } catch {
-    // Process already gone – clean up stale state
-    removeRuntimeState();
-    console.log("pi-voice is not running (stale state cleaned up).");
-    process.exit(1);
+    // Socket not reachable – try SIGTERM as fallback
+    const state = readRuntimeState();
+    if (state) {
+      try {
+        process.kill(state.pid, "SIGTERM");
+        console.log(`Stopping pi-voice daemon (pid: ${state.pid})...`);
+      } catch {
+        removeRuntimeState();
+        console.log("pi-voice daemon is not running (stale state cleaned up).");
+        process.exit(1);
+      }
+    }
   }
 }
 
 // ── show ────────────────────────────────────────────────────────────
-function cmdShow(): void {
-  const state = readRuntimeState();
-  if (!state) {
-    console.error("pi-voice is not running. Use 'pi-voice start' first.");
-    process.exit(1);
-  }
+async function cmdShow(): Promise<void> {
+  if (!isDaemonRunning()) dieNotRunning();
+
   try {
-    process.kill(state.pid, "SIGUSR1");
-    console.log("Showing pi-voice window...");
+    const res = await sendCommand("show");
+    if (res.ok) {
+      console.log("Showing pi-voice window...");
+    } else {
+      console.error(`Failed to show window: ${res.error}`);
+      process.exit(1);
+    }
   } catch {
-    removeRuntimeState();
-    console.error("pi-voice is not running (stale state cleaned up).");
-    process.exit(1);
+    // Socket not reachable – try SIGUSR1 as fallback
+    const state = readRuntimeState();
+    if (state) {
+      try {
+        process.kill(state.pid, "SIGUSR1");
+        console.log("Showing pi-voice window...");
+      } catch {
+        removeRuntimeState();
+        console.error("pi-voice daemon is not running (stale state cleaned up).");
+        process.exit(1);
+      }
+    } else {
+      dieNotRunning();
+    }
   }
 }
 
 // ── start ───────────────────────────────────────────────────────────
 function cmdStart(): void {
-  const state = readRuntimeState();
-  if (state) {
+  if (isDaemonRunning()) {
+    const state = readRuntimeState()!;
     console.error(
-      `pi-voice is already running in ${state.cwd} (pid: ${state.pid}).`
+      `pi-voice daemon is already running in ${state.cwd} (pid: ${state.pid}).`
     );
     process.exit(1);
   }
@@ -96,8 +153,6 @@ function cmdStart(): void {
   const cwd = process.cwd();
 
   // Resolve electron binary
-  // 1. Try local node_modules (dev)
-  // 2. Fall back to require.resolve (installed)
   const projectRoot = resolve(import.meta.dirname, "..");
   const localElectron = join(
     projectRoot,
@@ -122,7 +177,7 @@ function cmdStart(): void {
     process.exit(1);
   }
 
-  // Spawn Electron as a detached background process
+  // Spawn Electron daemon as a detached background process
   const child = spawn(electronBin, [mainEntry], {
     cwd,
     env: {
@@ -134,7 +189,7 @@ function cmdStart(): void {
   });
   child.unref();
 
-  console.log(`pi-voice started (pid: ${child.pid}, cwd: ${cwd})`);
+  console.log(`pi-voice daemon started (pid: ${child.pid}, cwd: ${cwd})`);
 }
 
 // ── main ────────────────────────────────────────────────────────────
@@ -144,12 +199,12 @@ switch (command) {
     cmdStart();
     break;
   case "status":
-    cmdStatus();
+    await cmdStatus();
     break;
   case "stop":
-    cmdStop();
+    await cmdStop();
     break;
   case "show":
-    cmdShow();
+    await cmdShow();
     break;
 }

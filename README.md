@@ -10,28 +10,28 @@ bun link          # `pi-voice` コマンドをグローバルに登録
 
 ## CLI
 
-pi-voice はバックグラウンド常駐型のアプリケーションです。ウィンドウを閉じてもプロセスは動き続け、Fn キーで録音できます。
+pi-voice は **daemon 型**のアプリケーションです。Docker と同じように、`start` でバックグラウンドに常駐し、CLI で操作します。起動時にウィンドウは表示されません。
 
-`status` / `stop` / `show` は Electron を起動せず即応します。
+`status` / `stop` / `show` は Electron を起動せず、Unix socket 経由で daemon と通信して即応します。
 
 ```bash
-# 現在のディレクトリで pi-voice を起動（ウィンドウ表示）
+# daemon をバックグラウンドで起動（ウィンドウは表示されない）
 pi-voice start
 
-# 起動状態を確認（起動ディレクトリ・PID を表示）
+# daemon の状態を確認（state・PID・uptime を表示）
 pi-voice status
 
-# ウィンドウを再表示
+# ウィンドウを表示
 pi-voice show
 
-# 停止（Fn キーも無効化）
+# daemon を停止（Fn キーも無効化）
 pi-voice stop
 ```
 
 - `start` は引数なしのデフォルトコマンドです。既に起動中ならエラーで終了します。
 - `start` は事前に `bun run build` が必要です（`out/main/index.js` がなければエラー）。
-- ウィンドウを閉じてもバックグラウンドで動作し続けます。完全に停止するには `stop` か Cmd+Q を使ってください。
-- 実行状態は `~/.pi-voice/runtime-state.json` に保存されます。
+- ウィンドウを閉じても daemon はバックグラウンドで動作し続けます。完全に停止するには `stop` か Cmd+Q を使ってください。
+- 実行状態は `~/.pi-voice/runtime-state.json`、制御 socket は `~/.pi-voice/daemon.sock` に配置されます。
 
 ### 開発モード
 
