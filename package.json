@@ -3,24 +3,29 @@
   "version": "0.1.0",
   "description": "Voice interface for pi coding agent",
   "author": "yukukotani",
-  "main": "./out/main/index.js",
+  "license": "MIT",
   "type": "module",
-  "private": true,
+  "main": "./out/main/index.js",
   "bin": {
     "pi-voice": "./bin/pi-voice"
   },
+  "files": [
+    "bin/",
+    "out/",
+    "build/"
+  ],
   "scripts": {
     "cli": "bun src/cli.ts",
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "electron-vite build && bun run build:cli",
+    "build:cli": "bun build src/cli.ts --outdir out/cli --target node --format esm --external electron",
     "preview": "electron-vite preview",
-    "postinstall": "electron-builder install-app-deps",
+    "prepack": "bun run build",
     "dist": "bun run build && electron-builder --mac --config",
     "dist:dir": "bun run build && electron-builder --mac --dir --config"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "electron": "^40.2.1",
     "electron-vite": "^3.1.0",
     "electron-builder": "^26.0.0"
   },
@@ -30,6 +35,7 @@
   "dependencies": {
     "@google/genai": "^1.40.0",
     "@mariozechner/pi-coding-agent": "^0.52.7",
+    "electron": "^40.2.1",
     "iohook-macos": "^1.2.1"
   },
   "trustedDependencies": [

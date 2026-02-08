@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * Lightweight CLI for pi-voice.
  * Runs without Electron – only `start` spawns the Electron daemon.
@@ -8,6 +7,7 @@
 import { resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import {
   readRuntimeState,
   removeRuntimeState,
@@ -39,6 +39,23 @@ function parseCommand(): Command {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
+
+/** Walk up from `dir` to find the nearest directory containing package.json. */
+function findPackageRoot(dir: string): string {
+  let current = resolve(dir);
+  while (true) {
+    if (existsSync(join(current, "package.json"))) {
+      return current;
+    }
+    const parent = resolve(current, "..");
+    if (parent === current) {
+      // Reached filesystem root without finding package.json
+      console.error("Could not find package root (no package.json found).");
+      process.exit(1);
+    }
+    current = parent;
+  }
+}
 
 /** Check if the daemon appears to be running (PID file + process alive). */
 function isDaemonRunning(): boolean {
@@ -141,7 +158,7 @@ async function cmdShow(): Promise<void> {
 }
 
 // ── start ───────────────────────────────────────────────────────────
-function cmdStart(): void {
+async function cmdStart(): Promise<void> {
   if (isDaemonRunning()) {
     const state = readRuntimeState()!;
     console.error(
@@ -152,19 +169,16 @@ function cmdStart(): void {
 
   const cwd = process.cwd();
 
-  // Resolve electron binary
-  const projectRoot = resolve(import.meta.dirname, "..");
-  const localElectron = join(
-    projectRoot,
-    "node_modules",
-    ".bin",
-    "electron"
-  );
+  // Resolve package root by walking up from current file to find package.json.
+  // Works both from source (src/cli.ts) and built output (out/cli/cli.js).
+  const projectRoot = findPackageRoot(import.meta.dirname);
   let electronBin: string;
-  if (existsSync(localElectron)) {
-    electronBin = localElectron;
-  } else {
-    console.error("Could not find electron binary.");
+  try {
+    // The electron package's main export is a string path to the binary
+    const _require = createRequire(import.meta.url);
+    electronBin = _require("electron") as unknown as string;
+  } catch {
+    console.error("Could not find electron binary. Is 'electron' installed?");
     process.exit(1);
   }
 
@@ -196,7 +210,7 @@ function cmdStart(): void {
 const command = parseCommand();
 switch (command) {
   case "start":
-    cmdStart();
+    await cmdStart();
     break;
   case "status":
     await cmdStatus();
