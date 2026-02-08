@@ -222,8 +222,8 @@ function setupCsp() {
   session.defaultSession.webRequest.onHeadersReceived(
     (details, callback) => {
       const csp = isDev
-        ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* http://localhost:*; media-src blob:"
-        : "default-src 'self'; style-src 'self' 'unsafe-inline'; media-src blob:";
+        ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* http://localhost:*; media-src 'self' blob:"
+        : "default-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:";
       callback({
         responseHeaders: {
           ...details.responseHeaders,

@@ -1,5 +1,8 @@
 /// <reference path="../shared/types.ts" />
 
+import toggleOnUrl from "../assets/toggle_on.wav?url";
+import toggleOffUrl from "../assets/toggle_off.wav?url";
+
 const indicator = document.getElementById("indicator")!;
 const icon = document.getElementById("icon")!;
 const stateLabel = document.getElementById("stateLabel")!;
@@ -8,6 +11,13 @@ const statusMessage = document.getElementById("statusMessage")!;
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 let audioContext: AudioContext | null = null;
+
+function playSoundEffect(url: string) {
+  const audio = new Audio(url);
+  audio.play().catch((err) => {
+    console.error("Failed to play sound effect:", err);
+  });
+}
 
 const stateConfig: Record<
   string,
@@ -57,6 +67,7 @@ window.piVoice.onStatusMessage((message) => {
 
 // Recording control from main
 window.piVoice.onStartRecording(async () => {
+  playSoundEffect(toggleOnUrl);
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
@@ -93,6 +104,7 @@ window.piVoice.onStartRecording(async () => {
 });
 
 window.piVoice.onStopRecording(() => {
+  playSoundEffect(toggleOffUrl);
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
     mediaRecorder.stop();
   }
