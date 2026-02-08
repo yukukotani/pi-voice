@@ -2,7 +2,7 @@
   "name": "pi-voice",
   "version": "0.1.0",
   "description": "Voice interface for pi coding agent",
-  "author": "yukukotani",
+  "author": "Yuku Kotani",
   "license": "MIT",
   "type": "module",
   "main": "./out/main/index.js",
