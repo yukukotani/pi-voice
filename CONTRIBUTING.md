@@ -32,16 +32,4 @@ bun run preview
 
 Launches Electron with the built artifacts for manual verification.
 
-## Distribution
 
-```bash
-bun run dist
-```
-
-Runs `build` followed by electron-builder to produce macOS dmg/zip in `release/`.
-
-For a directory-only output (useful for testing):
-
-```bash
-bun run dist:dir
-```

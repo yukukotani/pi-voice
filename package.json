@@ -11,8 +11,7 @@
   },
   "files": [
     "bin/",
-    "out/",
-    "build/"
+    "out/"
   ],
   "scripts": {
     "cli": "bun src/cli.ts",
@@ -23,14 +22,11 @@
     "build:cli": "bun build src/cli.ts --outdir out/cli --target node --format esm --external electron",
     "preview": "electron-vite preview",
     "prepack": "bun run build",
-    "dist": "bun run build && electron-builder --mac --config",
-    "dist:dir": "bun run build && electron-builder --mac --dir --config",
     "prepublish": "bun run build"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "electron-vite": "^3.1.0",
-    "electron-builder": "^26.0.0"
+    "electron-vite": "^3.1.0"
   },
   "peerDependencies": {
     "typescript": "^5"
