@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import { FnHook } from "./services/fn-hook.js";
 import { loadConfig } from "./services/config.js";
@@ -29,8 +29,6 @@ const workingCwd = process.env["PI_VOICE_CWD"] || process.cwd();
 let mainWindow: BrowserWindow | null = null;
 let fnHook: FnHook | null = null;
 let currentState: AppState = "idle";
-let forceQuit = false;
-let configKeyDisplay: string = "";
 
 // Tell pi-session to use the caller's cwd
 piSession.setSessionCwd(workingCwd);
@@ -38,21 +36,15 @@ piSession.setSessionCwd(workingCwd);
 function setState(state: AppState, message?: string) {
   currentState = state;
   console.log(`[Main] State: ${state}${message ? ` - ${message}` : ""}`);
-  mainWindow?.webContents.send(IPC.STATE_CHANGED, state);
-  if (message) {
-    mainWindow?.webContents.send(IPC.STATUS_MESSAGE, message);
-  }
 }
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 400,
     height: 300,
-    resizable: true,
-    alwaysOnTop: true,
-    titleBarStyle: "hiddenInset",
-    // Daemon-first: window starts hidden
+    // Hidden audio worker – never shown to user
     show: false,
+    skipTaskbar: true,
     webPreferences: {
       preload: fileURLToPath(
         new URL("../preload/index.cjs", import.meta.url)
@@ -72,37 +64,9 @@ function createWindow() {
     );
   }
 
-  // Send key display name to renderer once loaded
-  mainWindow.webContents.on("did-finish-load", () => {
-    if (configKeyDisplay) {
-      mainWindow?.webContents.send(IPC.KEY_DISPLAY, configKeyDisplay);
-    }
-  });
-
-  // Hide on close instead of destroying – keeps daemon running in background
-  mainWindow.on("close", (e) => {
-    if (!forceQuit) {
-      e.preventDefault();
-      mainWindow?.hide();
-    }
-  });
-
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
-}
-
-function showWindow() {
-  if (mainWindow) {
-    mainWindow.show();
-    mainWindow.focus();
-  } else {
-    createWindow();
-    mainWindow!.once("ready-to-show", () => {
-      mainWindow!.show();
-      mainWindow!.focus();
-    });
-  }
 }
 
 function setupIpcHandlers() {
@@ -200,7 +164,6 @@ function setupIpcHandlers() {
 
 function setupFnHook() {
   const config = loadConfig(workingCwd);
-  configKeyDisplay = config.keyDisplay;
 
   fnHook = new FnHook(
     {
@@ -233,23 +196,6 @@ function setupFnHook() {
   }
 }
 
-function setupCsp() {
-  const isDev = !app.isPackaged && !!process.env["ELECTRON_RENDERER_URL"];
-  session.defaultSession.webRequest.onHeadersReceived(
-    (details, callback) => {
-      const csp = isDev
-        ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* http://localhost:*; media-src 'self' blob:"
-        : "default-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:";
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          "Content-Security-Policy": [csp],
-        },
-      });
-    }
-  );
-}
-
 // ── Daemon IPC command handler ──────────────────────────────────────
 
 function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
@@ -263,14 +209,9 @@ function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
         uptime: process.uptime(),
       };
 
-    case "show":
-      showWindow();
-      return { ok: true };
-
     case "stop":
       // Schedule quit after responding
       setImmediate(() => {
-        forceQuit = true;
         app.quit();
       });
       return { ok: true };
@@ -293,7 +234,6 @@ function gracefulShutdown() {
 // ── Signal handlers (legacy – kept for direct kill signals) ─────────
 process.on("SIGTERM", () => {
   gracefulShutdown();
-  forceQuit = true;
   app.quit();
 });
 
@@ -302,16 +242,10 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   console.log("[Main] Another instance is already running. Exiting.");
   app.quit();
-} else {
-  // When a second instance is launched, show the existing window
-  app.on("second-instance", () => {
-    showWindow();
-  });
 }
 
 // ── App lifecycle ───────────────────────────────────────────────────
 app.whenReady().then(() => {
-  setupCsp();
   createWindow();
   setupIpcHandlers();
   setupFnHook();
@@ -323,17 +257,11 @@ app.whenReady().then(() => {
   console.log(`[Main] pi-voice daemon started (cwd: ${workingCwd})`);
 });
 
-// On macOS, don't quit when all windows are closed – stay in background
+// Don't quit when all windows are closed – stay in background
 app.on("window-all-closed", () => {
   // Do nothing – keep daemon running
 });
 
-app.on("activate", () => {
-  // Re-show window when dock icon is clicked
-  showWindow();
-});
-
 app.on("before-quit", () => {
-  forceQuit = true;
   gracefulShutdown();
 });

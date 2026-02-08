@@ -17,7 +17,6 @@ pi-voice is a daemon-style application that runs in the background once started.
 ```bash
 pi-voice start    # start the daemon in the background
 pi-voice status   # show state, PID, and uptime
-pi-voice show     # bring the window to front
 pi-voice stop     # stop the daemon
 ```
 

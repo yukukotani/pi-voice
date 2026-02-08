@@ -23,17 +23,6 @@ const api: PiVoiceAPI = {
   onPlayAudioStreamEnd: (callback) => {
     ipcRenderer.on(IPC.PLAY_AUDIO_STREAM_END, () => callback());
   },
-  onStateChanged: (callback) => {
-    ipcRenderer.on(IPC.STATE_CHANGED, (_event, state) => callback(state));
-  },
-  onStatusMessage: (callback) => {
-    ipcRenderer.on(IPC.STATUS_MESSAGE, (_event, message) => callback(message));
-  },
-  onKeyDisplay: (callback) => {
-    ipcRenderer.on(IPC.KEY_DISPLAY, (_event, keyDisplay: string) =>
-      callback(keyDisplay)
-    );
-  },
   sendRecordingData: (data) => {
     ipcRenderer.send(IPC.RECORDING_DATA, data);
   },

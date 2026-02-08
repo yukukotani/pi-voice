@@ -1,12 +1,13 @@
+/**
+ * Audio worker running in a hidden BrowserWindow.
+ * Handles microphone recording (MediaRecorder) and PCM streaming playback (Web Audio API).
+ * No UI rendering – all visual elements have been removed.
+ */
+
 /// <reference path="../shared/types.ts" />
 
 import toggleOnUrl from "../assets/toggle_on.wav?url";
 import toggleOffUrl from "../assets/toggle_off.wav?url";
-
-const indicator = document.getElementById("indicator")!;
-const icon = document.getElementById("icon")!;
-const stateLabel = document.getElementById("stateLabel")!;
-const statusMessage = document.getElementById("statusMessage")!;
 
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
@@ -32,71 +33,6 @@ function playSoundEffect(url: string) {
       console.error("Failed to play sound effect:", err);
     });
 }
-
-let keyDisplayName = "\u2318+Shift+I"; // default, updated from main process
-
-function getStateConfig(): Record<
-  string,
-  { icon: string; label: string; defaultMessage: string }
-> {
-  return {
-    idle: { icon: "\u23F8", label: "IDLE", defaultMessage: `Hold ${keyDisplayName} to speak` },
-    recording: {
-      icon: "\u{1F534}",
-      label: "RECORDING",
-      defaultMessage: "Listening...",
-    },
-    transcribing: {
-      icon: "\u{1F504}",
-      label: "TRANSCRIBING",
-      defaultMessage: "Converting speech to text...",
-    },
-    thinking: {
-      icon: "\u{1F9E0}",
-      label: "THINKING",
-      defaultMessage: "pi is thinking...",
-    },
-    speaking: {
-      icon: "\u{1F50A}",
-      label: "SPEAKING",
-      defaultMessage: "Playing response...",
-    },
-    error: { icon: "\u26A0", label: "ERROR", defaultMessage: "An error occurred" },
-  };
-}
-
-// State updates from main
-window.piVoice.onStateChanged((state) => {
-  // Remove all state classes
-  document.body.className = "";
-  document.body.classList.add(`state-${state}`);
-
-  const sc = getStateConfig()[state];
-  if (sc) {
-    icon.textContent = sc.icon;
-    stateLabel.textContent = sc.label;
-    statusMessage.textContent = sc.defaultMessage;
-  }
-});
-
-window.piVoice.onStatusMessage((message) => {
-  statusMessage.textContent = message;
-});
-
-// Update key display name from config
-const hintEl = document.querySelector(".hint") as HTMLElement | null;
-
-window.piVoice.onKeyDisplay((display) => {
-  keyDisplayName = display;
-  // Update hint text
-  if (hintEl) {
-    hintEl.textContent = `${display}: push-to-talk`;
-  }
-  // Update idle message if currently idle
-  if (document.body.classList.contains("state-idle")) {
-    statusMessage.textContent = `Hold ${display} to speak`;
-  }
-});
 
 // Recording control from main
 window.piVoice.onStartRecording(async () => {
@@ -152,8 +88,6 @@ let streamActiveSources = 0;
 let streamEnded = false;
 
 function stopStreamPlayback() {
-  // Cancel all scheduled sources is not easily possible with Web Audio,
-  // but resetting the context effectively stops everything.
   streamActiveSources = 0;
   streamEnded = false;
   streamNextPlayTime = 0;

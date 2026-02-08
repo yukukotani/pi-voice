@@ -8,7 +8,7 @@
 bun run dev:electron
 ```
 
-Starts a Vite dev server with HMR for the renderer and launches Electron. Closing the window exits the process in dev mode.
+Starts a Vite dev server with HMR and launches Electron as a background daemon (no visible window).
 
 ### Dev mode (CLI only)
 
@@ -31,5 +31,3 @@ bun run preview
 ```
 
 Launches Electron with the built artifacts for manual verification.
-
-

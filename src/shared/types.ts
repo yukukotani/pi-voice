@@ -15,9 +15,6 @@ export const IPC = {
   PLAY_AUDIO_STREAM_START: "play-audio-stream-start",
   PLAY_AUDIO_STREAM_CHUNK: "play-audio-stream-chunk",
   PLAY_AUDIO_STREAM_END: "play-audio-stream-end",
-  STATE_CHANGED: "state-changed",
-  STATUS_MESSAGE: "status-message",
-  KEY_DISPLAY: "key-display",
 
   // renderer -> main
   RECORDING_DATA: "recording-data",
@@ -39,9 +36,6 @@ export interface PiVoiceAPI {
   onPlayAudioStreamStart: (callback: (meta: AudioStreamMeta) => void) => void;
   onPlayAudioStreamChunk: (callback: (pcmData: ArrayBuffer) => void) => void;
   onPlayAudioStreamEnd: (callback: () => void) => void;
-  onStateChanged: (callback: (state: AppState) => void) => void;
-  onStatusMessage: (callback: (message: string) => void) => void;
-  onKeyDisplay: (callback: (keyDisplay: string) => void) => void;
   sendRecordingData: (data: ArrayBuffer) => void;
   sendRecordingError: (error: string) => void;
   sendPlaybackDone: () => void;

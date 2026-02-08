@@ -5,7 +5,7 @@
  * The CLI connects as a client, sends a JSON command, and receives a JSON response.
  *
  * Protocol (newline-delimited JSON):
- *   → { "command": "status" | "show" | "stop" }
+ *   → { "command": "status" | "stop" }
  *   ← { "ok": true, ...payload } | { "ok": false, "error": "..." }
  */
 
@@ -15,7 +15,7 @@ import { getSocketPath } from "./runtime-state.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export type DaemonCommand = "status" | "show" | "stop";
+export type DaemonCommand = "status" | "stop";
 
 export interface DaemonRequest {
   command: DaemonCommand;

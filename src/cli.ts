@@ -14,7 +14,7 @@ import {
 } from "./services/runtime-state.js";
 import { sendCommand } from "./services/daemon-ipc.js";
 
-type Command = "start" | "status" | "stop" | "show";
+type Command = "start" | "status" | "stop";
 
 function usage(): never {
   console.log(`Usage: pi-voice <command>
@@ -22,8 +22,7 @@ function usage(): never {
 Commands:
   start   Start the pi-voice daemon in the background (default)
   status  Show daemon status (state, PID, uptime)
-  stop    Stop the running daemon
-  show    Bring the window to front`);
+  stop    Stop the running daemon`);
   process.exit(0);
 }
 
@@ -32,7 +31,6 @@ function parseCommand(): Command {
   if (!arg || arg === "start") return "start";
   if (arg === "status") return "status";
   if (arg === "stop") return "stop";
-  if (arg === "show") return "show";
   if (arg === "--help" || arg === "-h") usage();
   console.error(`Unknown command: ${arg}`);
   usage();
@@ -60,12 +58,6 @@ function findPackageRoot(dir: string): string {
 /** Check if the daemon appears to be running (PID file + process alive). */
 function isDaemonRunning(): boolean {
   return readRuntimeState() !== null;
-}
-
-/** Pretty-print an error when daemon is not reachable. */
-function dieNotRunning(): never {
-  console.error("pi-voice daemon is not running. Use 'pi-voice start' first.");
-  process.exit(1);
 }
 
 // ── status ──────────────────────────────────────────────────────────
@@ -123,36 +115,6 @@ async function cmdStop(): Promise<void> {
         console.log("pi-voice daemon is not running (stale state cleaned up).");
         process.exit(1);
       }
-    }
-  }
-}
-
-// ── show ────────────────────────────────────────────────────────────
-async function cmdShow(): Promise<void> {
-  if (!isDaemonRunning()) dieNotRunning();
-
-  try {
-    const res = await sendCommand("show");
-    if (res.ok) {
-      console.log("Showing pi-voice window...");
-    } else {
-      console.error(`Failed to show window: ${res.error}`);
-      process.exit(1);
-    }
-  } catch {
-    // Socket not reachable – try SIGUSR1 as fallback
-    const state = readRuntimeState();
-    if (state) {
-      try {
-        process.kill(state.pid, "SIGUSR1");
-        console.log("Showing pi-voice window...");
-      } catch {
-        removeRuntimeState();
-        console.error("pi-voice daemon is not running (stale state cleaned up).");
-        process.exit(1);
-      }
-    } else {
-      dieNotRunning();
     }
   }
 }
@@ -217,8 +179,5 @@ switch (command) {
     break;
   case "stop":
     await cmdStop();
-    break;
-  case "show":
-    await cmdShow();
     break;
 }
