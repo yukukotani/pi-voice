@@ -1,13 +1,12 @@
 /**
  * Lightweight CLI for pi-voice.
- * Runs without Electron – only `start` spawns the Electron daemon.
- * All other commands talk to the running daemon via Unix socket.
+ * All commands talk to the running daemon via Unix socket.
+ * `start` spawns the daemon as a detached Bun/Node process.
  */
 
 import { resolve, join } from "node:path";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import {
   readRuntimeState,
   removeRuntimeState,
@@ -73,11 +72,11 @@ async function cmdStatus(): Promise<void> {
     if (res.ok) {
       const uptime = typeof res.uptime === "number" ? Math.floor(res.uptime as number) : "?";
       console.log(
-        `running: ${res.cwd} (pid: ${res.pid}, state: ${res.state}, uptime: ${uptime}s)`
+        `running: ${res.cwd} (pid: ${res.pid}, state: ${res.state}, uptime: ${uptime}s)`,
       );
     } else {
       console.log(
-        `running: ${state.cwd} (pid: ${state.pid}, since: ${state.startedAt})`
+        `running: ${state.cwd} (pid: ${state.pid}, since: ${state.startedAt})`,
       );
       console.log(`  (daemon responded with error: ${res.error})`);
     }
@@ -124,7 +123,7 @@ async function cmdStart(): Promise<void> {
   if (isDaemonRunning()) {
     const state = readRuntimeState()!;
     console.error(
-      `pi-voice daemon is already running in ${state.cwd} (pid: ${state.pid}).`
+      `pi-voice daemon is already running in ${state.cwd} (pid: ${state.pid}).`,
     );
     process.exit(1);
   }
@@ -134,27 +133,19 @@ async function cmdStart(): Promise<void> {
   // Resolve package root by walking up from current file to find package.json.
   // Works both from source (src/cli.ts) and built output (out/cli/cli.js).
   const projectRoot = findPackageRoot(import.meta.dirname);
-  let electronBin: string;
-  try {
-    // The electron package's main export is a string path to the binary
-    const _require = createRequire(import.meta.url);
-    electronBin = _require("electron") as unknown as string;
-  } catch {
-    console.error("Could not find electron binary. Is 'electron' installed?");
-    process.exit(1);
-  }
 
   // Resolve main entry (built output)
-  const mainEntry = join(projectRoot, "out", "main", "index.js");
+  const mainEntry = join(projectRoot, "out", "main", "main.js");
   if (!existsSync(mainEntry)) {
     console.error(
-      "Electron main entry not found. Run 'bun run build' first."
+      "Main entry not found. Run 'bun run build' first.",
     );
     process.exit(1);
   }
 
-  // Spawn Electron daemon as a detached background process
-  const child = spawn(electronBin, [mainEntry], {
+  // Spawn daemon as a detached background process using bun or node
+  const runtime = process.argv[0]!; // bun or node
+  const child = spawn(runtime, [mainEntry], {
     cwd,
     env: {
       ...process.env,

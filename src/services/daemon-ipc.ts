@@ -1,7 +1,7 @@
 /**
  * Unix socket–based IPC for daemon control.
  *
- * The daemon (Electron main process) runs a server on a Unix domain socket.
+ * The daemon runs a server on a Unix domain socket.
  * The CLI connects as a client, sends a JSON command, and receives a JSON response.
  *
  * Protocol (newline-delimited JSON):

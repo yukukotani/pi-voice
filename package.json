@@ -5,28 +5,26 @@
   "author": "Yuku Kotani",
   "license": "MIT",
   "type": "module",
-  "main": "./out/main/index.js",
+  "main": "./out/main/main.js",
   "bin": {
     "pi-voice": "./bin/pi-voice"
   },
   "files": [
     "bin/",
-    "out/"
+    "out/",
+    "src/assets/"
   ],
   "scripts": {
     "cli": "bun src/cli.ts",
-    "dev:electron": "electron-vite dev",
-    "dev:cli": "bun src/cli.ts",
-    "build": "bun run build:electron && bun run build:cli",
-    "build:electron": "electron-vite build",
-    "build:cli": "bun build src/cli.ts --outdir out/cli --target node --format esm --external electron",
-    "preview": "electron-vite preview",
+    "dev": "bun src/main.ts",
+    "build": "bun run build:main && bun run build:cli",
+    "build:main": "bun build src/main.ts --outdir out/main --target node --format esm --external node-web-audio-api --external uiohook-napi --external @mariozechner/pi-coding-agent --external @google/genai",
+    "build:cli": "bun build src/cli.ts --outdir out/cli --target node --format esm",
     "prepack": "bun run build",
     "prepublish": "bun run build"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "electron-vite": "^3.1.0"
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -34,12 +32,12 @@
   "dependencies": {
     "@google/genai": "^1.40.0",
     "@mariozechner/pi-coding-agent": "^0.52.7",
-    "electron": "^40.2.1",
+    "node-web-audio-api": "^1.0.7",
     "uiohook-napi": "^1.5.4"
   },
   "trustedDependencies": [
-    "electron",
     "uiohook-napi",
-    "protobufjs"
+    "protobufjs",
+    "node-web-audio-api"
   ]
 }
