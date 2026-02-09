@@ -1,31 +1,52 @@
 import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
+import type { SpeechProvider } from "./config.js";
 
-let ai: GoogleGenAI | null = null;
+// ── Gemini client ────────────────────────────────────────────────────
 
-function getClient(): GoogleGenAI {
-  if (ai) return ai;
+let geminiClient: GoogleGenAI | null = null;
+
+function getGeminiClient(): GoogleGenAI {
+  if (geminiClient) return geminiClient;
   const project = process.env.GOOGLE_CLOUD_PROJECT;
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
   if (!project) {
     throw new Error("GOOGLE_CLOUD_PROJECT environment variable is required");
   }
-  ai = new GoogleGenAI({ vertexai: true, project, location });
-  return ai;
+  geminiClient = new GoogleGenAI({ vertexai: true, project, location });
+  return geminiClient;
 }
 
-/** Default audio parameters for Gemini TTS */
+// ── OpenAI client ────────────────────────────────────────────────────
+
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (openaiClient) return openaiClient;
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY environment variable is required");
+  }
+  openaiClient = new OpenAI({ apiKey });
+  return openaiClient;
+}
+
+// ── Audio parameters ─────────────────────────────────────────────────
+
+/** Default audio parameters (shared across providers – both output 24kHz 16-bit mono PCM) */
 export const TTS_SAMPLE_RATE = 24000;
 export const TTS_CHANNELS = 1;
 export const TTS_BITS_PER_SAMPLE = 16;
 
-/**
- * Convert text to speech using Gemini 2.5 Flash TTS on Vertex AI (streaming).
- * Yields raw PCM chunks (24kHz, 16-bit, mono) as Buffers.
- */
-export async function* synthesizeStream(
-  text: string
+/** Chunk size for splitting OpenAI PCM response (~100ms of audio) */
+const OPENAI_PCM_CHUNK_SIZE = TTS_SAMPLE_RATE * (TTS_BITS_PER_SAMPLE / 8) * TTS_CHANNELS * 0.1; // 4800 bytes
+
+// ── Gemini TTS ───────────────────────────────────────────────────────
+
+async function* synthesizeStreamGemini(
+  text: string,
 ): AsyncGenerator<Buffer, void, undefined> {
-  const client = getClient();
+  const client = getGeminiClient();
 
   const response = await client.models.generateContentStream({
     model: "gemini-2.5-flash-preview-tts",
@@ -89,8 +110,61 @@ export async function* synthesizeStream(
   }
 
   console.log(
-    `[TTS] Streamed ${totalBytes} bytes of PCM audio for "${text.substring(0, 50)}..."`
+    `[TTS:gemini] Streamed ${totalBytes} bytes of PCM audio for "${text.substring(0, 50)}..."`,
   );
 }
 
+// ── OpenAI TTS ───────────────────────────────────────────────────────
 
+async function* synthesizeStreamOpenAI(
+  text: string,
+): AsyncGenerator<Buffer, void, undefined> {
+  const client = getOpenAIClient();
+
+  const response = await client.audio.speech.create({
+    model: "gpt-4o-mini-tts",
+    voice: "alloy",
+    input: text,
+    response_format: "pcm", // raw 24kHz 16-bit signed LE mono PCM
+  });
+
+  const arrayBuffer = await response.arrayBuffer();
+  const fullBuffer = Buffer.from(arrayBuffer);
+
+  let totalBytes = 0;
+  let offset = 0;
+
+  // Split into fixed-size chunks for smooth streaming playback
+  while (offset < fullBuffer.length) {
+    const end = Math.min(offset + OPENAI_PCM_CHUNK_SIZE, fullBuffer.length);
+    const chunk = fullBuffer.subarray(offset, end);
+    totalBytes += chunk.length;
+    yield chunk;
+    offset = end;
+  }
+
+  console.log(
+    `[TTS:openai] Streamed ${totalBytes} bytes of PCM audio for "${text.substring(0, 50)}..."`,
+  );
+}
+
+// ── Public API ───────────────────────────────────────────────────────
+
+/**
+ * Convert text to speech using the configured provider (streaming).
+ * Yields raw PCM chunks (24kHz, 16-bit, mono) as Buffers.
+ */
+export async function* synthesizeStream(
+  text: string,
+  provider: SpeechProvider = "gemini",
+): AsyncGenerator<Buffer, void, undefined> {
+  switch (provider) {
+    case "openai":
+      yield* synthesizeStreamOpenAI(text);
+      break;
+    case "gemini":
+    default:
+      yield* synthesizeStreamGemini(text);
+      break;
+  }
+}

@@ -42,13 +42,22 @@ You can configure pi-voice in `.pi/pi-voice.json`:
 
 ```json
 {
-  "key": "ctrl+t"
+  "key": "ctrl+t",
+  "provider": "openai"
 }
 ```
 
 | Key | Description |
 | --- | --- |
 | `key` | Push-to-talk shortcut. Combine modifiers (`ctrl`, `shift`, `alt`/`opt`, `meta`/`cmd`) and a main key with `+`. Examples: `"ctrl+t"`, `"alt+space"`, `"ctrl+shift+r"`. Default: `"meta+shift+i"`. |
+| `provider` | Speech provider for STT & TTS. `"gemini"` (Vertex AI) or `"openai"`. Default: `"gemini"`. |
+
+### Environment variables
+
+| Provider | Required variables |
+| --- | --- |
+| `gemini` | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (optional, default `us-central1`) |
+| `openai` | `OPENAI_API_KEY` |
 
 ## Contributing
 

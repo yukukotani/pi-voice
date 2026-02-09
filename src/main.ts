@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import { FnHook } from "./services/fn-hook.js";
-import { loadConfig } from "./services/config.js";
+import { loadConfig, type SpeechProvider } from "./services/config.js";
 import { transcribe } from "./services/stt.js";
 import {
   synthesizeStream,
@@ -69,7 +69,7 @@ function createWindow() {
   });
 }
 
-function setupIpcHandlers() {
+function setupIpcHandlers(provider: SpeechProvider) {
   // Receive recording data from renderer
   ipcMain.on(IPC.RECORDING_DATA, async (_event, data: ArrayBuffer) => {
     if (currentState !== "recording") return;
@@ -86,7 +86,7 @@ function setupIpcHandlers() {
     try {
       // Step 1: Transcribe
       setState("transcribing", "Transcribing...");
-      const text = await transcribe(audioBuffer);
+      const text = await transcribe(audioBuffer, provider);
 
       if (!text) {
         setState("idle", "No speech detected");
@@ -115,7 +115,7 @@ function setupIpcHandlers() {
 
           // Queue TTS for this segment (runs serially via chain)
           ttsChain = ttsChain.then(async () => {
-            for await (const pcmChunk of synthesizeStream(segment)) {
+            for await (const pcmChunk of synthesizeStream(segment, provider)) {
               mainWindow?.webContents.send(
                 IPC.PLAY_AUDIO_STREAM_CHUNK,
                 pcmChunk.buffer.slice(
@@ -162,9 +162,7 @@ function setupIpcHandlers() {
   });
 }
 
-function setupFnHook() {
-  const config = loadConfig(workingCwd);
-
+function setupFnHook(config: ReturnType<typeof loadConfig>) {
   fnHook = new FnHook(
     {
       onFnDown: () => {
@@ -246,9 +244,11 @@ if (!gotLock) {
 
 // ── App lifecycle ───────────────────────────────────────────────────
 app.whenReady().then(() => {
+  const config = loadConfig(workingCwd);
+
   createWindow();
-  setupIpcHandlers();
-  setupFnHook();
+  setupIpcHandlers(config.provider);
+  setupFnHook(config);
 
   // Start daemon IPC server
   startDaemonServer(handleDaemonCommand);

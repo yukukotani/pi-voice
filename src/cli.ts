@@ -13,6 +13,7 @@ import {
   removeRuntimeState,
 } from "./services/runtime-state.js";
 import { sendCommand } from "./services/daemon-ipc.js";
+import { loadConfig } from "./services/config.js";
 
 type Command = "start" | "status" | "stop";
 
@@ -165,7 +166,9 @@ async function cmdStart(): Promise<void> {
   });
   child.unref();
 
+  const config = loadConfig(cwd);
   console.log(`pi-voice daemon started (pid: ${child.pid}, cwd: ${cwd})`);
+  console.log(`  key: ${config.keyDisplay}, provider: ${config.provider}`);
 }
 
 // ── main ────────────────────────────────────────────────────────────

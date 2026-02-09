@@ -14,11 +14,16 @@ export interface KeyBinding {
   meta: boolean;
 }
 
+/** Supported speech provider */
+export type SpeechProvider = "gemini" | "openai";
+
 export interface PiVoiceConfig {
   /** Key binding for push-to-talk (e.g. "ctrl+t", "meta+shift+i") */
   key: KeyBinding;
   /** Original key string for display (e.g. "meta+shift+i") */
   keyDisplay: string;
+  /** Speech provider for STT & TTS (default: "gemini") */
+  provider: SpeechProvider;
 }
 
 // ── Key name → UiohookKey mapping ────────────────────────────────────
@@ -188,11 +193,14 @@ export function formatKeyDisplay(binding: KeyBinding): string {
 // ── Default config ───────────────────────────────────────────────────
 
 const DEFAULT_KEY_STRING = "meta+shift+i";
+const DEFAULT_PROVIDER: SpeechProvider = "gemini";
+const VALID_PROVIDERS: SpeechProvider[] = ["gemini", "openai"];
 
 function defaultConfig(): PiVoiceConfig {
   return {
     key: parseKeyBinding(DEFAULT_KEY_STRING),
     keyDisplay: formatKeyDisplay(parseKeyBinding(DEFAULT_KEY_STRING)),
+    provider: DEFAULT_PROVIDER,
   };
 }
 
@@ -209,16 +217,33 @@ export function loadConfig(cwd: string): PiVoiceConfig {
     const raw = readFileSync(configPath, "utf-8");
     const json = JSON.parse(raw) as Record<string, unknown>;
 
-    if (typeof json.key !== "string") {
-      console.warn(`[Config] "key" must be a string in ${configPath}, using default`);
-      return defaultConfig();
+    // Parse key binding (optional – falls back to default)
+    let binding: KeyBinding;
+    let display: string;
+    if (typeof json.key === "string") {
+      binding = parseKeyBinding(json.key);
+      display = formatKeyDisplay(binding);
+    } else {
+      if (json.key !== undefined) {
+        console.warn(`[Config] "key" must be a string in ${configPath}, using default`);
+      }
+      binding = parseKeyBinding(DEFAULT_KEY_STRING);
+      display = formatKeyDisplay(binding);
     }
 
-    const binding = parseKeyBinding(json.key);
-    const display = formatKeyDisplay(binding);
+    // Parse provider (optional – falls back to default)
+    let provider = DEFAULT_PROVIDER;
+    if (typeof json.provider === "string") {
+      const p = json.provider.toLowerCase() as SpeechProvider;
+      if (VALID_PROVIDERS.includes(p)) {
+        provider = p;
+      } else {
+        console.warn(`[Config] Unknown provider "${json.provider}" in ${configPath}, using default "${DEFAULT_PROVIDER}"`);
+      }
+    }
 
-    console.log(`[Config] Loaded key binding: ${json.key} (${display}) from ${configPath}`);
-    return { key: binding, keyDisplay: display };
+    console.log(`[Config] Loaded config: key=${display}, provider=${provider} from ${configPath}`);
+    return { key: binding, keyDisplay: display, provider };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       // File not found — normal, use default
