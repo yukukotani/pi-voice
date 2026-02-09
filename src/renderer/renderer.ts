@@ -1,6 +1,6 @@
 /**
  * Audio worker running in a hidden BrowserWindow.
- * Handles microphone recording (MediaRecorder) and PCM streaming playback (Web Audio API).
+ * Handles microphone recording (MediaRecorder or raw PCM) and PCM streaming playback (Web Audio API).
  * No UI rendering – all visual elements have been removed.
  */
 
@@ -12,6 +12,16 @@ import toggleOffUrl from "../assets/toggle_off.wav?url";
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 let audioContext: AudioContext | null = null;
+
+// ── PCM recording state ──────────────────────────────────────────────
+let pcmStream: MediaStream | null = null;
+let pcmSourceNode: MediaStreamAudioSourceNode | null = null;
+let pcmProcessorNode: ScriptProcessorNode | null = null;
+let pcmChunks: Float32Array[] = [];
+let pcmRecording = false;
+
+/** Target sample rate for Whisper */
+const WHISPER_SAMPLE_RATE = 16000;
 
 function playSoundEffect(url: string) {
   const ctx = audioContext ?? new AudioContext();
@@ -34,38 +44,145 @@ function playSoundEffect(url: string) {
     });
 }
 
-// Recording control from main
-window.piVoice.onStartRecording(async () => {
+/**
+ * Downsample Float32 PCM from sourceSampleRate to targetSampleRate using
+ * simple linear interpolation. Good enough for speech.
+ */
+function downsample(
+  buffer: Float32Array,
+  sourceSampleRate: number,
+  targetSampleRate: number,
+): Float32Array {
+  if (sourceSampleRate === targetSampleRate) return buffer;
+  const ratio = sourceSampleRate / targetSampleRate;
+  const newLength = Math.round(buffer.length / ratio);
+  const result = new Float32Array(newLength);
+  for (let i = 0; i < newLength; i++) {
+    const srcIndex = i * ratio;
+    const lo = Math.floor(srcIndex);
+    const hi = Math.min(lo + 1, buffer.length - 1);
+    const frac = srcIndex - lo;
+    result[i] = buffer[lo]! * (1 - frac) + buffer[hi]! * frac;
+  }
+  return result;
+}
+
+// ── WebM recording (for cloud providers) ─────────────────────────────
+
+function startWebmRecording(stream: MediaStream) {
+  audioChunks = [];
+
+  mediaRecorder = new MediaRecorder(stream, {
+    mimeType: "audio/webm;codecs=opus",
+  });
+
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      audioChunks.push(event.data);
+    }
+  };
+
+  mediaRecorder.onstop = async () => {
+    stream.getTracks().forEach((track) => track.stop());
+
+    if (audioChunks.length === 0) {
+      window.piVoice.sendRecordingError("No audio data captured");
+      return;
+    }
+
+    const blob = new Blob(audioChunks, { type: "audio/webm" });
+    const arrayBuffer = await blob.arrayBuffer();
+    window.piVoice.sendRecordingData(arrayBuffer);
+  };
+
+  mediaRecorder.start(100);
+}
+
+function stopWebmRecording() {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop();
+  }
+}
+
+// ── Raw PCM recording (for local Whisper) ────────────────────────────
+
+function startPcmRecording(stream: MediaStream) {
+  const ctx = audioContext ?? new AudioContext();
+  if (!audioContext) audioContext = ctx;
+
+  pcmStream = stream;
+  pcmChunks = [];
+  pcmRecording = true;
+
+  pcmSourceNode = ctx.createMediaStreamSource(stream);
+
+  // Buffer size 4096 is a good balance between latency and performance
+  pcmProcessorNode = ctx.createScriptProcessor(4096, 1, 1);
+  pcmProcessorNode.onaudioprocess = (event) => {
+    if (!pcmRecording) return;
+    // Copy the channel data (it gets reused by the browser)
+    const input = event.inputBuffer.getChannelData(0);
+    pcmChunks.push(new Float32Array(input));
+  };
+
+  pcmSourceNode.connect(pcmProcessorNode);
+  // ScriptProcessorNode requires connection to destination to fire events
+  pcmProcessorNode.connect(ctx.destination);
+}
+
+function stopPcmRecording() {
+  pcmRecording = false;
+
+  pcmProcessorNode?.disconnect();
+  pcmSourceNode?.disconnect();
+  pcmStream?.getTracks().forEach((track) => track.stop());
+
+  if (pcmChunks.length === 0) {
+    window.piVoice.sendRecordingError("No audio data captured");
+    pcmProcessorNode = null;
+    pcmSourceNode = null;
+    pcmStream = null;
+    return;
+  }
+
+  // Concatenate all chunks
+  const totalLength = pcmChunks.reduce((sum, c) => sum + c.length, 0);
+  const fullBuffer = new Float32Array(totalLength);
+  let offset = 0;
+  for (const chunk of pcmChunks) {
+    fullBuffer.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  // Downsample from AudioContext.sampleRate (typically 48kHz) to 16kHz
+  const sourceSampleRate = audioContext?.sampleRate ?? 48000;
+  const resampled = downsample(fullBuffer, sourceSampleRate, WHISPER_SAMPLE_RATE);
+
+  // Send as ArrayBuffer (Float32)
+  window.piVoice.sendRecordingData(resampled.buffer as ArrayBuffer);
+
+  pcmChunks = [];
+  pcmProcessorNode = null;
+  pcmSourceNode = null;
+  pcmStream = null;
+}
+
+// ── Recording control from main ──────────────────────────────────────
+
+let currentRecordingFormat: "webm" | "pcm" = "webm";
+
+window.piVoice.onStartRecording(async (format) => {
   playSoundEffect(toggleOnUrl);
+  currentRecordingFormat = format;
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioChunks = [];
 
-    mediaRecorder = new MediaRecorder(stream, {
-      mimeType: "audio/webm;codecs=opus",
-    });
-
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        audioChunks.push(event.data);
-      }
-    };
-
-    mediaRecorder.onstop = async () => {
-      // Stop all tracks
-      stream.getTracks().forEach((track) => track.stop());
-
-      if (audioChunks.length === 0) {
-        window.piVoice.sendRecordingError("No audio data captured");
-        return;
-      }
-
-      const blob = new Blob(audioChunks, { type: "audio/webm" });
-      const arrayBuffer = await blob.arrayBuffer();
-      window.piVoice.sendRecordingData(arrayBuffer);
-    };
-
-    mediaRecorder.start(100); // Collect data every 100ms
+    if (format === "pcm") {
+      startPcmRecording(stream);
+    } else {
+      startWebmRecording(stream);
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     window.piVoice.sendRecordingError(`Microphone access failed: ${msg}`);
@@ -74,8 +191,11 @@ window.piVoice.onStartRecording(async () => {
 
 window.piVoice.onStopRecording(() => {
   playSoundEffect(toggleOffUrl);
-  if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    mediaRecorder.stop();
+
+  if (currentRecordingFormat === "pcm") {
+    stopPcmRecording();
+  } else {
+    stopWebmRecording();
   }
 });
 

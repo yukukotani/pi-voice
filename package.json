@@ -34,6 +34,7 @@
   "dependencies": {
     "@google/genai": "^1.40.0",
     "@mariozechner/pi-coding-agent": "^0.52.7",
+    "@napi-rs/whisper": "^0.0.4",
     "electron": "^40.2.1",
     "openai": "^6.10.0",
     "uiohook-napi": "^1.5.4"

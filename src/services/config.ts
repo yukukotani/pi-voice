@@ -15,7 +15,7 @@ export interface KeyBinding {
 }
 
 /** Supported speech provider */
-export type SpeechProvider = "gemini" | "openai";
+export type SpeechProvider = "local" | "gemini" | "openai";
 
 export interface PiVoiceConfig {
   /** Key binding for push-to-talk (e.g. "ctrl+t", "meta+shift+i") */
@@ -193,8 +193,8 @@ export function formatKeyDisplay(binding: KeyBinding): string {
 // ── Default config ───────────────────────────────────────────────────
 
 const DEFAULT_KEY_STRING = "meta+shift+i";
-const DEFAULT_PROVIDER: SpeechProvider = "gemini";
-const VALID_PROVIDERS: SpeechProvider[] = ["gemini", "openai"];
+const DEFAULT_PROVIDER: SpeechProvider = "local";
+const VALID_PROVIDERS: SpeechProvider[] = ["local", "gemini", "openai"];
 
 function defaultConfig(): PiVoiceConfig {
   return {

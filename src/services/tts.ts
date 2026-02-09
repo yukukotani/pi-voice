@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
+import { spawn } from "node:child_process";
 import type { SpeechProvider } from "./config.js";
 
 // ── Gemini client ────────────────────────────────────────────────────
@@ -148,17 +149,65 @@ async function* synthesizeStreamOpenAI(
   );
 }
 
+// ── Local TTS (macOS say command) ────────────────────────────────────
+
+/**
+ * Speak text using the macOS `say` command, playing directly through the
+ * system audio output. Returns a promise that resolves when speech finishes.
+ */
+export function speakLocal(text: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (process.platform !== "darwin") {
+      reject(new Error("Local TTS (say command) is only supported on macOS"));
+      return;
+    }
+
+    const voice = process.env.SAY_VOICE;
+    const args: string[] = [];
+    if (voice) {
+      args.push("-v", voice);
+    }
+    args.push(text);
+
+    const child = spawn("say", args, { stdio: "ignore" });
+
+    child.on("error", (err) => {
+      reject(new Error(`Failed to spawn say command: ${err.message}`));
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        console.log(
+          `[TTS:local] Spoke "${text.substring(0, 50)}${text.length > 50 ? "..." : ""}"`,
+        );
+        resolve();
+      } else {
+        reject(new Error(`say command exited with code ${code}`));
+      }
+    });
+  });
+}
+
 // ── Public API ───────────────────────────────────────────────────────
 
 /**
  * Convert text to speech using the configured provider (streaming).
  * Yields raw PCM chunks (24kHz, 16-bit, mono) as Buffers.
+ *
+ * NOTE: For the "local" provider, use `speakLocal()` instead – the `say`
+ * command plays audio directly through the system speaker, so PCM streaming
+ * is not applicable.
  */
 export async function* synthesizeStream(
   text: string,
-  provider: SpeechProvider = "gemini",
+  provider: SpeechProvider = "local",
 ): AsyncGenerator<Buffer, void, undefined> {
   switch (provider) {
+    case "local":
+      // say plays directly – yield nothing; callers should use speakLocal()
+      throw new Error(
+        "Local TTS does not support PCM streaming. Use speakLocal() instead.",
+      );
     case "openai":
       yield* synthesizeStreamOpenAI(text);
       break;

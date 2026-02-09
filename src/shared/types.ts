@@ -7,6 +7,13 @@ export type AppState =
   | "speaking"
   | "error";
 
+/**
+ * Recording format sent from main to renderer.
+ * - "webm": MediaRecorder with audio/webm;codecs=opus (for cloud providers)
+ * - "pcm":  Raw 16kHz mono Float32 PCM via Web Audio API (for local Whisper)
+ */
+export type RecordingFormat = "webm" | "pcm";
+
 /** IPC channel names */
 export const IPC = {
   // main -> renderer
@@ -31,7 +38,7 @@ export interface AudioStreamMeta {
 
 /** Exposed API in renderer via contextBridge */
 export interface PiVoiceAPI {
-  onStartRecording: (callback: () => void) => void;
+  onStartRecording: (callback: (format: RecordingFormat) => void) => void;
   onStopRecording: (callback: () => void) => void;
   onPlayAudioStreamStart: (callback: (meta: AudioStreamMeta) => void) => void;
   onPlayAudioStreamChunk: (callback: (pcmData: ArrayBuffer) => void) => void;

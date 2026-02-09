@@ -1,9 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type PiVoiceAPI, type AudioStreamMeta } from "./shared/types.js";
+import { IPC, type PiVoiceAPI, type AudioStreamMeta, type RecordingFormat } from "./shared/types.js";
 
 const api: PiVoiceAPI = {
   onStartRecording: (callback) => {
-    ipcRenderer.on(IPC.START_RECORDING, () => callback());
+    ipcRenderer.on(IPC.START_RECORDING, (_event, format: RecordingFormat) => callback(format ?? "webm"));
   },
   onStopRecording: (callback) => {
     ipcRenderer.on(IPC.STOP_RECORDING, () => callback());

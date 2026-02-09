@@ -14,6 +14,7 @@ import {
 } from "./services/runtime-state.js";
 import { sendCommand } from "./services/daemon-ipc.js";
 import { loadConfig } from "./services/config.js";
+import { resolveModelPath } from "./services/whisper-model.js";
 
 type Command = "start" | "status" | "stop";
 
@@ -131,6 +132,18 @@ async function cmdStart(): Promise<void> {
   }
 
   const cwd = process.cwd();
+  const config = loadConfig(cwd);
+
+  // For local provider, ensure Whisper model is available before spawning daemon
+  if (config.provider === "local") {
+    try {
+      await resolveModelPath();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Failed to prepare Whisper model: ${msg}`);
+      process.exit(1);
+    }
+  }
 
   // Resolve package root by walking up from current file to find package.json.
   // Works both from source (src/cli.ts) and built output (out/cli/cli.js).
@@ -166,7 +179,6 @@ async function cmdStart(): Promise<void> {
   });
   child.unref();
 
-  const config = loadConfig(cwd);
   console.log(`pi-voice daemon started (pid: ${child.pid}, cwd: ${cwd})`);
   console.log(`  key: ${config.keyDisplay}, provider: ${config.provider}`);
 }

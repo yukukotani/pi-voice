@@ -5,12 +5,13 @@ import { loadConfig, type SpeechProvider } from "./services/config.js";
 import { transcribe } from "./services/stt.js";
 import {
   synthesizeStream,
+  speakLocal,
   TTS_SAMPLE_RATE,
   TTS_CHANNELS,
   TTS_BITS_PER_SAMPLE,
 } from "./services/tts.js";
 import * as piSession from "./services/pi-session.js";
-import { IPC, type AppState } from "./shared/types.js";
+import { IPC, type AppState, type RecordingFormat } from "./shared/types.js";
 import {
   saveRuntimeState,
   removeRuntimeState,
@@ -21,6 +22,7 @@ import {
   type DaemonCommand,
   type DaemonResponse,
 } from "./services/daemon-ipc.js";
+import { resolveModelPath } from "./services/whisper-model.js";
 
 // ── Resolve working directory ───────────────────────────────────────
 // CLI passes the caller's cwd via PI_VOICE_CWD env variable.
@@ -74,10 +76,8 @@ function setupIpcHandlers(provider: SpeechProvider) {
   ipcMain.on(IPC.RECORDING_DATA, async (_event, data: ArrayBuffer) => {
     if (currentState !== "recording") return;
 
-    const audioBuffer = Buffer.from(data);
-
     // Skip very short recordings (likely accidental taps)
-    if (audioBuffer.length < 1000) {
+    if (data.byteLength < 1000) {
       console.log("[Main] Recording too short, ignoring");
       setState("idle", "Recording too short");
       return;
@@ -86,7 +86,7 @@ function setupIpcHandlers(provider: SpeechProvider) {
     try {
       // Step 1: Transcribe
       setState("transcribing", "Transcribing...");
-      const text = await transcribe(audioBuffer, provider);
+      const text = await transcribe(data, provider);
 
       if (!text) {
         setState("idle", "No speech detected");
@@ -96,45 +96,66 @@ function setupIpcHandlers(provider: SpeechProvider) {
       // Step 2: Send to pi – start TTS as each text segment completes
       setState("thinking", `Sent: "${text}"`);
 
-      let streamStarted = false;
-      // Chain of TTS promises to guarantee playback order
-      let ttsChain = Promise.resolve();
+      if (provider === "local") {
+        // Local TTS: say command plays directly through system audio
+        let speakStarted = false;
+        let ttsChain = Promise.resolve();
 
-      await piSession.prompt(text, {
-        onTextEnd: (segment) => {
-          // Switch to speaking state & send stream-start on first segment
-          if (!streamStarted) {
-            streamStarted = true;
-            setState("speaking", "Generating speech...");
-            mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_START, {
-              sampleRate: TTS_SAMPLE_RATE,
-              channels: TTS_CHANNELS,
-              bitsPerSample: TTS_BITS_PER_SAMPLE,
-            });
-          }
-
-          // Queue TTS for this segment (runs serially via chain)
-          ttsChain = ttsChain.then(async () => {
-            for await (const pcmChunk of synthesizeStream(segment, provider)) {
-              mainWindow?.webContents.send(
-                IPC.PLAY_AUDIO_STREAM_CHUNK,
-                pcmChunk.buffer.slice(
-                  pcmChunk.byteOffset,
-                  pcmChunk.byteOffset + pcmChunk.byteLength
-                )
-              );
+        await piSession.prompt(text, {
+          onTextEnd: (segment) => {
+            if (!speakStarted) {
+              speakStarted = true;
+              setState("speaking", "Speaking...");
             }
-          });
-        },
-      });
+            ttsChain = ttsChain.then(() => speakLocal(segment));
+          },
+        });
 
-      // Wait for all queued TTS segments to finish
-      await ttsChain;
+        await ttsChain;
 
-      if (streamStarted) {
-        mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_END);
+        if (!speakStarted) {
+          setState("idle", "No response from pi");
+        } else {
+          setState("idle");
+        }
       } else {
-        setState("idle", "No response from pi");
+        // Cloud providers: stream PCM through Electron renderer
+        let streamStarted = false;
+        let ttsChain = Promise.resolve();
+
+        await piSession.prompt(text, {
+          onTextEnd: (segment) => {
+            if (!streamStarted) {
+              streamStarted = true;
+              setState("speaking", "Generating speech...");
+              mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_START, {
+                sampleRate: TTS_SAMPLE_RATE,
+                channels: TTS_CHANNELS,
+                bitsPerSample: TTS_BITS_PER_SAMPLE,
+              });
+            }
+
+            ttsChain = ttsChain.then(async () => {
+              for await (const pcmChunk of synthesizeStream(segment, provider)) {
+                mainWindow?.webContents.send(
+                  IPC.PLAY_AUDIO_STREAM_CHUNK,
+                  pcmChunk.buffer.slice(
+                    pcmChunk.byteOffset,
+                    pcmChunk.byteOffset + pcmChunk.byteLength
+                  )
+                );
+              }
+            });
+          },
+        });
+
+        await ttsChain;
+
+        if (streamStarted) {
+          mainWindow?.webContents.send(IPC.PLAY_AUDIO_STREAM_END);
+        } else {
+          setState("idle", "No response from pi");
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -163,6 +184,8 @@ function setupIpcHandlers(provider: SpeechProvider) {
 }
 
 function setupFnHook(config: ReturnType<typeof loadConfig>) {
+  const recordingFormat: RecordingFormat = config.provider === "local" ? "pcm" : "webm";
+
   fnHook = new FnHook(
     {
       onFnDown: () => {
@@ -173,7 +196,7 @@ function setupFnHook(config: ReturnType<typeof loadConfig>) {
           return;
         }
         setState("recording", "Recording...");
-        mainWindow?.webContents.send(IPC.START_RECORDING);
+        mainWindow?.webContents.send(IPC.START_RECORDING, recordingFormat);
       },
       onFnUp: () => {
         if (currentState !== "recording") return;
@@ -243,8 +266,20 @@ if (!gotLock) {
 }
 
 // ── App lifecycle ───────────────────────────────────────────────────
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const config = loadConfig(workingCwd);
+
+  // For local provider, ensure Whisper model is available (downloads if needed)
+  if (config.provider === "local") {
+    try {
+      await resolveModelPath();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[Main] Failed to prepare Whisper model:", msg);
+      app.quit();
+      return;
+    }
+  }
 
   createWindow();
   setupIpcHandlers(config.provider);

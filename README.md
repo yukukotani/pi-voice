@@ -43,21 +43,38 @@ You can configure pi-voice in `.pi/pi-voice.json`:
 ```json
 {
   "key": "ctrl+t",
-  "provider": "openai"
+  "provider": "local"
 }
 ```
 
 | Key | Description |
 | --- | --- |
 | `key` | Push-to-talk shortcut. Combine modifiers (`ctrl`, `shift`, `alt`/`opt`, `meta`/`cmd`) and a main key with `+`. Examples: `"ctrl+t"`, `"alt+space"`, `"ctrl+shift+r"`. Default: `"meta+shift+i"`. |
-| `provider` | Speech provider for STT & TTS. `"gemini"` (Vertex AI) or `"openai"`. Default: `"gemini"`. |
+| `provider` | Speech provider for STT & TTS. `"local"`, `"gemini"` (Vertex AI), or `"openai"`. Default: `"local"`. |
 
 ### Environment variables
 
 | Provider | Required variables |
 | --- | --- |
+| `local` | None (model is auto-downloaded on first launch). Optional: `WHISPER_MODEL_PATH` (custom model path), `WHISPER_MODEL` (model name, default `medium-q5_0`), `SAY_VOICE` (macOS `say` voice name, e.g. `"Kyoko"`). |
 | `gemini` | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (optional, default `us-central1`) |
 | `openai` | `OPENAI_API_KEY` |
+
+#### Whisper model (local provider)
+
+The `local` provider uses [Whisper](https://github.com/openai/whisper) for STT and the macOS `say` command for TTS. On first launch, a ggml-format Whisper model (`medium-q5_0`, ~514 MB) is automatically downloaded to `~/.pi/whisper/` and cached for subsequent runs.
+
+To use a different model, set `WHISPER_MODEL`:
+
+```bash
+export WHISPER_MODEL=base     # smaller & faster
+```
+
+Or point to your own model file directly:
+
+```bash
+export WHISPER_MODEL_PATH=/path/to/ggml-custom.bin
+```
 
 ## Contributing
 

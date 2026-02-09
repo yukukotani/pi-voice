@@ -1,6 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 import OpenAI, { toFile } from "openai";
+import {
+  Whisper,
+  WhisperFullParams,
+  WhisperSamplingStrategy,
+} from "@napi-rs/whisper";
 import type { SpeechProvider } from "./config.js";
+import { resolveModelPath } from "./whisper-model.js";
 
 // ── Gemini client ────────────────────────────────────────────────────
 
@@ -29,6 +35,31 @@ function getOpenAIClient(): OpenAI {
   }
   openaiClient = new OpenAI({ apiKey });
   return openaiClient;
+}
+
+// ── Local (Whisper) client ───────────────────────────────────────────
+
+let whisperInstance: Whisper | null = null;
+let whisperInitPromise: Promise<Whisper> | null = null;
+
+/**
+ * Get or initialize the Whisper instance.
+ * On first call, resolves the model path (which may trigger an auto-download)
+ * and loads the model. Subsequent calls return the cached instance.
+ */
+async function getWhisperInstance(): Promise<Whisper> {
+  if (whisperInstance) return whisperInstance;
+  if (whisperInitPromise) return whisperInitPromise;
+
+  whisperInitPromise = (async () => {
+    const modelPath = await resolveModelPath();
+    console.log("[STT:local] Loading Whisper model from", modelPath, "...");
+    whisperInstance = new Whisper(modelPath);
+    console.log("[STT:local] Whisper model loaded");
+    return whisperInstance;
+  })();
+
+  return whisperInitPromise;
 }
 
 // ── Gemini STT ───────────────────────────────────────────────────────
@@ -74,25 +105,54 @@ async function transcribeOpenAI(audioBuffer: Buffer): Promise<string> {
   return transcription.text?.trim() ?? "";
 }
 
+// ── Local STT (Whisper) ──────────────────────────────────────────────
+
+/**
+ * Transcribe raw 16kHz mono Float32 PCM samples using Whisper.
+ */
+async function transcribeLocal(samples: Float32Array): Promise<string> {
+  const whisper = await getWhisperInstance();
+
+  const params = new WhisperFullParams(WhisperSamplingStrategy.Greedy);
+  params.language = "auto";
+  params.printProgress = false;
+  params.printRealtime = false;
+  params.printTimestamps = false;
+  params.singleSegment = false;
+  params.noTimestamps = true;
+
+  return whisper.full(params, samples);
+}
+
 // ── Public API ───────────────────────────────────────────────────────
 
 /**
- * Transcribe audio data (WebM/Opus from MediaRecorder) to text
- * using the configured speech provider.
+ * Transcribe audio data to text using the configured speech provider.
+ *
+ * For "local" provider, `audioData` should be an ArrayBuffer containing
+ * 16kHz mono Float32 PCM (sent from renderer in PCM recording mode).
+ *
+ * For cloud providers, `audioData` should be an ArrayBuffer containing
+ * WebM/Opus audio (from MediaRecorder).
  */
 export async function transcribe(
-  audioBuffer: Buffer,
-  provider: SpeechProvider = "gemini",
+  audioData: ArrayBuffer,
+  provider: SpeechProvider = "local",
 ): Promise<string> {
   let text: string;
 
   switch (provider) {
+    case "local": {
+      const samples = new Float32Array(audioData);
+      text = await transcribeLocal(samples);
+      break;
+    }
     case "openai":
-      text = await transcribeOpenAI(audioBuffer);
+      text = await transcribeOpenAI(Buffer.from(audioData));
       break;
     case "gemini":
     default:
-      text = await transcribeGemini(audioBuffer);
+      text = await transcribeGemini(Buffer.from(audioData));
       break;
   }
 
