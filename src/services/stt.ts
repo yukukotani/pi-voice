@@ -14,7 +14,7 @@ function getClient(): GoogleGenAI {
 }
 
 /**
- * Transcribe audio data (WebM/Opus from MediaRecorder) to text
+ * Transcribe audio data (WAV PCM from microphone) to text
  * using Gemini 2.5 Flash on Vertex AI.
  */
 export async function transcribe(audioBuffer: Buffer): Promise<string> {
@@ -29,7 +29,7 @@ export async function transcribe(audioBuffer: Buffer): Promise<string> {
         parts: [
           {
             inlineData: {
-              mimeType: "audio/webm",
+              mimeType: "audio/wav",
               data: base64Audio,
             },
           },

@@ -2,13 +2,13 @@
 
 ## Development
 
-### Dev mode (Electron + HMR)
+### Dev mode (daemon foreground)
 
 ```bash
-bun run dev:electron
+bun run dev
 ```
 
-Starts a Vite dev server with HMR and launches Electron as a background daemon (no visible window).
+Starts the pi-voice daemon in the foreground with hot-reload. Press the configured push-to-talk key to test.
 
 ### Dev mode (CLI only)
 
@@ -23,11 +23,3 @@ bun run build
 ```
 
 Outputs a production build to `out/`.
-
-## Preview
-
-```bash
-bun run preview
-```
-
-Launches Electron with the built artifacts for manual verification.

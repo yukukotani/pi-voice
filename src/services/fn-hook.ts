@@ -1,6 +1,5 @@
 import { uIOhook, UiohookKey } from "uiohook-napi";
 import type { UiohookKeyboardEvent } from "uiohook-napi";
-import { systemPreferences } from "electron";
 import type { KeyBinding } from "./config.js";
 
 export type FnHookCallbacks = {
@@ -53,15 +52,9 @@ export class FnHook {
   start(): void {
     if (this.started) return;
 
-    // macOS requires accessibility permissions for global keyboard hooks
-    if (process.platform === "darwin") {
-      const trusted = systemPreferences.isTrustedAccessibilityClient(true);
-      if (!trusted) {
-        throw new Error(
-          "Accessibility permissions required. Please grant access in System Preferences > Privacy & Security > Accessibility, then restart the app."
-        );
-      }
-    }
+    // macOS requires accessibility permissions for global keyboard hooks.
+    // uiohook-napi will throw if permissions are missing; the error is
+    // caught by the caller and surfaced to the user.
 
     uIOhook.on("keydown", (e: UiohookKeyboardEvent) => {
       if (this.active) return; // already recording, ignore repeats
