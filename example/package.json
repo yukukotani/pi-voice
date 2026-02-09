@@ -1,0 +1,14 @@
+{
+  "name": "pi-voice-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "pi-voice": ".."
+  },
+  "trustedDependencies": [
+    "electron",
+    "uiohook-napi",
+    "protobufjs"
+  ]
+}
