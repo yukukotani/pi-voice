@@ -62,7 +62,7 @@ You can configure pi-voice in `.pi/pi-voice.json`:
 
 #### Whisper model (local provider)
 
-The `local` provider uses [Whisper](https://github.com/openai/whisper) for STT and the macOS `say` command for TTS. On first launch, a ggml-format Whisper model (`medium-q5_0`, ~514 MB) is automatically downloaded to `~/.pi/whisper/` and cached for subsequent runs.
+The `local` provider uses [Whisper](https://github.com/openai/whisper) for STT and the macOS `say` command for TTS. On first launch, a ggml-format Whisper model (`medium-q5_0`, ~514 MB) is automatically downloaded to `~/.pi-agent/whisper/` and cached for subsequent runs.
 
 To use a different model, set `WHISPER_MODEL`:
 

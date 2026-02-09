@@ -3,7 +3,7 @@
  *
  * Resolves the path to a ggml Whisper model file. If WHISPER_MODEL_PATH is set
  * it is used directly. Otherwise the default model is auto-downloaded to
- * ~/.pi/whisper/ on first use with progress output to stderr.
+ * ~/.pi-agent/whisper/ on first use with progress output to stderr.
  */
 
 import { existsSync, mkdirSync, createWriteStream, unlinkSync } from "node:fs";
@@ -17,7 +17,7 @@ const HF_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
 
 /** Directory where auto-downloaded models are cached */
 function modelCacheDir(): string {
-  return join(homedir(), ".pi", "whisper");
+  return join(homedir(), ".pi-agent", "whisper");
 }
 
 function modelFileName(model: string): string {
@@ -110,7 +110,7 @@ async function downloadModel(model: string, destPath: string): Promise<void> {
  * Resolve the path to a Whisper model file.
  *
  * 1. If `WHISPER_MODEL_PATH` is set, use it directly (error if missing).
- * 2. Otherwise, look for the default model in `~/.pi/whisper/`.
+ * 2. Otherwise, look for the default model in `~/.pi-agent/whisper/`.
  *    If not present, download it automatically.
  */
 export async function resolveModelPath(): Promise<string> {
