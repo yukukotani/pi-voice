@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { UiohookKey } from "uiohook-napi";
 import { z } from "zod";
+import logger from "./logger.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -255,7 +256,7 @@ export function loadConfig(cwd: string): PiVoiceConfig {
     raw = readFileSync(configPath, "utf-8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      console.log(`[Config] No config file found at ${configPath}, using defaults`);
+      logger.info({ configPath }, "No config file found, using defaults");
       return defaultConfig();
     }
     throw new ConfigError(configPath, `Failed to read file: ${(err as Error).message}`);
@@ -285,6 +286,6 @@ export function loadConfig(cwd: string): PiVoiceConfig {
   const binding = parseKeyBinding(parsed.key);
   const display = formatKeyDisplay(binding);
 
-  console.log(`[Config] Loaded config: key=${display}, provider=${parsed.provider} from ${configPath}`);
+  logger.info({ key: display, provider: parsed.provider, configPath }, "Loaded config");
   return { key: binding, keyDisplay: display, provider: parsed.provider };
 }

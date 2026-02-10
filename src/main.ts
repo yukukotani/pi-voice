@@ -23,6 +23,7 @@ import {
   type DaemonResponse,
 } from "./services/daemon-ipc.js";
 import { resolveModelPath } from "./services/whisper-model.js";
+import logger from "./services/logger.js";
 
 // ── Resolve working directory ───────────────────────────────────────
 // CLI passes the caller's cwd via PI_VOICE_CWD env variable.
@@ -37,7 +38,7 @@ piSession.setSessionCwd(workingCwd);
 
 function setState(state: AppState, message?: string) {
   currentState = state;
-  console.log(`[Main] State: ${state}${message ? ` - ${message}` : ""}`);
+  logger.info({ state, message }, "State changed");
 }
 
 function createWindow() {
@@ -78,7 +79,7 @@ function setupIpcHandlers(provider: SpeechProvider) {
 
     // Skip very short recordings (likely accidental taps)
     if (data.byteLength < 1000) {
-      console.log("[Main] Recording too short, ignoring");
+      logger.info("Recording too short, ignoring");
       setState("idle", "Recording too short");
       return;
     }
@@ -159,7 +160,7 @@ function setupIpcHandlers(provider: SpeechProvider) {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("[Main] Pipeline error:", msg);
+      logger.error({ err: msg }, "Pipeline error");
       setState("error", msg);
       // Return to idle after a brief error display
       setTimeout(() => {
@@ -169,7 +170,7 @@ function setupIpcHandlers(provider: SpeechProvider) {
   });
 
   ipcMain.on(IPC.RECORDING_ERROR, (_event, error: string) => {
-    console.error("[Main] Recording error:", error);
+    logger.error({ err: error }, "Recording error");
     setState("error", error);
     setTimeout(() => {
       if (currentState === "error") setState("idle");
@@ -190,8 +191,9 @@ function setupFnHook(config: ReturnType<typeof loadConfig>) {
     {
       onFnDown: () => {
         if (currentState !== "idle") {
-          console.log(
-            `[Main] ${config.keyDisplay} pressed but state is ${currentState}, ignoring`
+          logger.info(
+            { key: config.keyDisplay, state: currentState },
+            "Key pressed but not idle, ignoring",
           );
           return;
         }
@@ -212,7 +214,7 @@ function setupFnHook(config: ReturnType<typeof loadConfig>) {
     fnHook.start();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[Main] FnHook error:", msg);
+    logger.error({ err: msg }, "FnHook error");
     setState("error", msg);
   }
 }
@@ -245,7 +247,7 @@ function handleDaemonCommand(command: DaemonCommand): DaemonResponse {
 // ── Graceful shutdown ───────────────────────────────────────────────
 
 function gracefulShutdown() {
-  console.log("[Main] Shutting down...");
+  logger.info("Shutting down...");
   fnHook?.stop();
   piSession.dispose();
   stopDaemonServer();
@@ -261,7 +263,7 @@ process.on("SIGTERM", () => {
 // ── Single instance lock ────────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
-  console.log("[Main] Another instance is already running. Exiting.");
+  logger.warn("Another instance is already running. Exiting.");
   app.quit();
 }
 
@@ -272,9 +274,9 @@ app.whenReady().then(async () => {
     config = loadConfig(workingCwd);
   } catch (err) {
     if (err instanceof ConfigError) {
-      console.error(`[Main] ${err.message}`);
+      logger.error({ err: err.message }, "Config error");
     } else {
-      console.error(`[Main] Failed to load config: ${err instanceof Error ? err.message : String(err)}`);
+      logger.error({ err: err instanceof Error ? err.message : String(err) }, "Failed to load config");
     }
     app.quit();
     return;
@@ -286,7 +288,7 @@ app.whenReady().then(async () => {
       await resolveModelPath();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("[Main] Failed to prepare Whisper model:", msg);
+      logger.error({ err: msg }, "Failed to prepare Whisper model");
       app.quit();
       return;
     }
@@ -300,7 +302,7 @@ app.whenReady().then(async () => {
   startDaemonServer(handleDaemonCommand);
 
   saveRuntimeState(workingCwd);
-  console.log(`[Main] pi-voice daemon started (cwd: ${workingCwd})`);
+  logger.info({ cwd: workingCwd }, "pi-voice daemon started");
 });
 
 // Don't quit when all windows are closed – stay in background

@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { Readable } from "node:stream";
 import { finished } from "node:stream/promises";
+import logger from "./logger.js";
 
 const DEFAULT_MODEL = "medium-q5_0";
 const HF_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
@@ -29,7 +30,7 @@ function modelFileName(model: string): string {
  */
 async function downloadModel(model: string, destPath: string): Promise<void> {
   const url = `${HF_BASE_URL}/${modelFileName(model)}`;
-  console.log(`[Whisper] Downloading model "${model}" from ${url} ...`);
+  logger.info({ model, url }, "Downloading Whisper model");
 
   const response = await fetch(url, { method: "GET", redirect: "follow" });
 
@@ -94,7 +95,7 @@ async function downloadModel(model: string, destPath: string): Promise<void> {
     const { renameSync } = await import("node:fs");
     renameSync(tmpPath, destPath);
 
-    console.log(`[Whisper] Model saved to ${destPath}`);
+    logger.info({ destPath }, "Whisper model saved");
   } catch (err) {
     // Clean up partial download
     try {

@@ -2,6 +2,7 @@ import { uIOhook, UiohookKey } from "uiohook-napi";
 import type { UiohookKeyboardEvent } from "uiohook-napi";
 import { systemPreferences } from "electron";
 import type { KeyBinding } from "./config.js";
+import logger from "./logger.js";
 
 export type FnHookCallbacks = {
   onFnDown: () => void;
@@ -91,7 +92,7 @@ export class FnHook {
 
     uIOhook.start();
     this.started = true;
-    console.log(`[FnHook] Started monitoring ${this.displayName}`);
+    logger.info({ key: this.displayName }, "Started monitoring key");
   }
 
   stop(): void {
@@ -99,7 +100,7 @@ export class FnHook {
     uIOhook.stop();
     this.started = false;
     this.active = false;
-    console.log("[FnHook] Stopped monitoring");
+    logger.info("Stopped monitoring key");
   }
 
   get isFnDown(): boolean {

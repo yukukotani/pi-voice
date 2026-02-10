@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import { spawn } from "node:child_process";
 import type { SpeechProvider } from "./config.js";
+import logger from "./logger.js";
 
 // ── Gemini client ────────────────────────────────────────────────────
 
@@ -110,8 +111,9 @@ async function* synthesizeStreamGemini(
     yield leftover;
   }
 
-  console.log(
-    `[TTS:gemini] Streamed ${totalBytes} bytes of PCM audio for "${text.substring(0, 50)}..."`,
+  logger.info(
+    { provider: "gemini", totalBytes, text: text.substring(0, 50) },
+    "Streamed PCM audio",
   );
 }
 
@@ -144,8 +146,9 @@ async function* synthesizeStreamOpenAI(
     offset = end;
   }
 
-  console.log(
-    `[TTS:openai] Streamed ${totalBytes} bytes of PCM audio for "${text.substring(0, 50)}..."`,
+  logger.info(
+    { provider: "openai", totalBytes, text: text.substring(0, 50) },
+    "Streamed PCM audio",
   );
 }
 
@@ -177,8 +180,9 @@ export function speakLocal(text: string): Promise<void> {
 
     child.on("close", (code) => {
       if (code === 0) {
-        console.log(
-          `[TTS:local] Spoke "${text.substring(0, 50)}${text.length > 50 ? "..." : ""}"`,
+        logger.info(
+          { provider: "local", text: text.substring(0, 50) },
+          "Spoke text",
         );
         resolve();
       } else {

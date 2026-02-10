@@ -7,6 +7,7 @@ import {
 } from "@napi-rs/whisper";
 import type { SpeechProvider } from "./config.js";
 import { resolveModelPath } from "./whisper-model.js";
+import logger from "./logger.js";
 
 // ── Gemini client ────────────────────────────────────────────────────
 
@@ -53,9 +54,9 @@ async function getWhisperInstance(): Promise<Whisper> {
 
   whisperInitPromise = (async () => {
     const modelPath = await resolveModelPath();
-    console.log("[STT:local] Loading Whisper model from", modelPath, "...");
+    logger.info({ modelPath }, "Loading Whisper model");
     whisperInstance = new Whisper(modelPath);
-    console.log("[STT:local] Whisper model loaded");
+    logger.info("Whisper model loaded");
     return whisperInstance;
   })();
 
@@ -156,6 +157,6 @@ export async function transcribe(
       break;
   }
 
-  console.log(`[STT:${provider}] Transcribed: "${text}"`);
+  logger.info({ provider, text }, "Transcribed");
   return text;
 }

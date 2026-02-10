@@ -3,6 +3,7 @@ import {
   SessionManager,
   type AgentSession,
 } from "@mariozechner/pi-coding-agent";
+import logger from "./logger.js";
 
 let session: AgentSession | null = null;
 let sessionCwd: string = process.cwd();
@@ -22,13 +23,13 @@ export function setSessionCwd(cwd: string): void {
 export async function getOrCreateSession(): Promise<AgentSession> {
   if (session) return session;
 
-  console.log(`[PiSession] Creating new agent session (cwd: ${sessionCwd})...`);
+  logger.info({ cwd: sessionCwd }, "Creating new agent session");
   const result = await createAgentSession({
     cwd: sessionCwd,
     sessionManager: SessionManager.inMemory(),
   });
   session = result.session;
-  console.log("[PiSession] Session created");
+  logger.info("Agent session created");
   return session;
 }
 
@@ -55,7 +56,7 @@ export async function prompt(
     ) {
       const content = event.assistantMessageEvent.content.trim();
       if (content.length > 0) {
-        console.log(`[PiSession] Response: ${content}`);
+        logger.info({ content }, "Agent response");
         options?.onTextEnd?.(content);
       }
     }
@@ -75,6 +76,6 @@ export function dispose(): void {
   if (session) {
     session.dispose();
     session = null;
-    console.log("[PiSession] Session disposed");
+    logger.info("Agent session disposed");
   }
 }

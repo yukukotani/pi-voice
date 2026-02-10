@@ -62,6 +62,16 @@ You can configure pi-voice in `.pi/pi-voice.json`:
 | `gemini` | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (optional, default `us-central1`) |
 | `openai` | `OPENAI_API_KEY` |
 
+#### Logging
+
+The daemon writes structured JSON logs to both the console and a log file. The default log file path is `$XDG_CONFIG_HOME/pi-voice/daemon.log` (falls back to `~/.config/pi-voice/daemon.log`).
+
+To override the log file path:
+
+```bash
+export PI_VOICE_LOG_PATH=/path/to/custom.log
+```
+
 #### Whisper model (local provider)
 
 The `local` provider uses [Whisper](https://github.com/openai/whisper) for STT and the macOS `say` command for TTS. On first launch, a ggml-format Whisper model (`medium-q5_0`, ~514 MB) is automatically downloaded to `~/.pi-agent/whisper/` and cached for subsequent runs.

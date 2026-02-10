@@ -12,6 +12,7 @@
 import { createServer, createConnection, type Server } from "node:net";
 import { existsSync, unlinkSync } from "node:fs";
 import { getSocketPath } from "./runtime-state.js";
+import logger from "./logger.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ export function startDaemonServer(handler: CommandHandler): string {
   });
 
   server.listen(socketPath);
-  console.log(`[DaemonIPC] Listening on ${socketPath}`);
+  logger.info({ socketPath }, "DaemonIPC listening");
   return socketPath;
 }
 
@@ -97,7 +98,7 @@ export function stopDaemonServer(): void {
       // ignore
     }
   }
-  console.log("[DaemonIPC] Server stopped");
+  logger.info("DaemonIPC server stopped");
 }
 
 // ── Client (CLI side) ────────────────────────────────────────────────
