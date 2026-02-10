@@ -4,6 +4,10 @@
   "description": "Voice interface for pi coding agent",
   "author": "Yuku Kotani",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yukukotani/pi-voice"
+  },
   "type": "module",
   "main": "./out/main/index.js",
   "bin": {
