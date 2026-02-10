@@ -1,23 +1,8 @@
-import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import { spawn } from "node:child_process";
 import type { SpeechProvider } from "./config.js";
+import { getGeminiClient } from "./gemini-client.js";
 import logger from "./logger.js";
-
-// ── Gemini client ────────────────────────────────────────────────────
-
-let geminiClient: GoogleGenAI | null = null;
-
-function getGeminiClient(): GoogleGenAI {
-  if (geminiClient) return geminiClient;
-  const project = process.env.GOOGLE_CLOUD_PROJECT;
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
-  if (!project) {
-    throw new Error("GOOGLE_CLOUD_PROJECT environment variable is required");
-  }
-  geminiClient = new GoogleGenAI({ vertexai: true, project, location });
-  return geminiClient;
-}
 
 // ── OpenAI client ────────────────────────────────────────────────────
 
