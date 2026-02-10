@@ -1,6 +1,6 @@
 # pi-voice
 
-Voice interface for the [Pi Coding Agent](https://github.com/badlogic/pi-mono). Hold a key, speak, and pi executes your instructions with voice feedback.
+Headless voice interface for the [Pi Coding Agent](https://github.com/badlogic/pi-mono). Hold a key, speak, and pi executes your instructions with voice feedback.
 
 https://github.com/user-attachments/assets/06a0c56f-76bf-48cb-9de3-f9ca48a7245d
 
