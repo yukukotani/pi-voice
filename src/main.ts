@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import { FnHook } from "./services/fn-hook.js";
-import { loadConfig, type SpeechProvider } from "./services/config.js";
+import { loadConfig, ConfigError, type SpeechProvider } from "./services/config.js";
 import { transcribe } from "./services/stt.js";
 import {
   synthesizeStream,
@@ -267,7 +267,18 @@ if (!gotLock) {
 
 // ── App lifecycle ───────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  const config = loadConfig(workingCwd);
+  let config: ReturnType<typeof loadConfig>;
+  try {
+    config = loadConfig(workingCwd);
+  } catch (err) {
+    if (err instanceof ConfigError) {
+      console.error(`[Main] ${err.message}`);
+    } else {
+      console.error(`[Main] Failed to load config: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    app.quit();
+    return;
+  }
 
   // For local provider, ensure Whisper model is available (downloads if needed)
   if (config.provider === "local") {

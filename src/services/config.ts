@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { UiohookKey } from "uiohook-napi";
+import { z } from "zod";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -194,63 +195,96 @@ export function formatKeyDisplay(binding: KeyBinding): string {
 
 const DEFAULT_KEY_STRING = "meta+shift+i";
 const DEFAULT_PROVIDER: SpeechProvider = "local";
-const VALID_PROVIDERS: SpeechProvider[] = ["local", "gemini", "openai"];
 
 function defaultConfig(): PiVoiceConfig {
+  const binding = parseKeyBinding(DEFAULT_KEY_STRING);
   return {
-    key: parseKeyBinding(DEFAULT_KEY_STRING),
-    keyDisplay: formatKeyDisplay(parseKeyBinding(DEFAULT_KEY_STRING)),
+    key: binding,
+    keyDisplay: formatKeyDisplay(binding),
     provider: DEFAULT_PROVIDER,
   };
 }
 
+// ── Zod schema for pi-voice.json ─────────────────────────────────────
+
+const configFileSchema = z.object({
+  key: z
+    .string()
+    .refine(
+      (v) => {
+        try {
+          parseKeyBinding(v);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: "Invalid key binding" },
+    )
+    .optional()
+    .default(DEFAULT_KEY_STRING),
+  provider: z.enum(["local", "gemini", "openai"]).optional().default(DEFAULT_PROVIDER),
+});
+
 // ── Config loader ────────────────────────────────────────────────────
 
 /**
+ * Custom error class thrown when the config file is present but invalid.
+ * Callers should catch this to show a user-friendly message and exit.
+ */
+export class ConfigError extends Error {
+  constructor(
+    public readonly configPath: string,
+    public readonly details: string,
+  ) {
+    super(`Invalid config at ${configPath}:\n${details}`);
+    this.name = "ConfigError";
+  }
+}
+
+/**
  * Load config from `<cwd>/.pi/pi-voice.json`.
- * Falls back to defaults if the file doesn't exist or is invalid.
+ * Falls back to defaults if the file doesn't exist.
+ * Throws `ConfigError` if the file exists but contains invalid values.
  */
 export function loadConfig(cwd: string): PiVoiceConfig {
   const configPath = join(cwd, ".pi", "pi-voice.json");
 
+  let raw: string;
   try {
-    const raw = readFileSync(configPath, "utf-8");
-    const json = JSON.parse(raw) as Record<string, unknown>;
-
-    // Parse key binding (optional – falls back to default)
-    let binding: KeyBinding;
-    let display: string;
-    if (typeof json.key === "string") {
-      binding = parseKeyBinding(json.key);
-      display = formatKeyDisplay(binding);
-    } else {
-      if (json.key !== undefined) {
-        console.warn(`[Config] "key" must be a string in ${configPath}, using default`);
-      }
-      binding = parseKeyBinding(DEFAULT_KEY_STRING);
-      display = formatKeyDisplay(binding);
-    }
-
-    // Parse provider (optional – falls back to default)
-    let provider = DEFAULT_PROVIDER;
-    if (typeof json.provider === "string") {
-      const p = json.provider.toLowerCase() as SpeechProvider;
-      if (VALID_PROVIDERS.includes(p)) {
-        provider = p;
-      } else {
-        console.warn(`[Config] Unknown provider "${json.provider}" in ${configPath}, using default "${DEFAULT_PROVIDER}"`);
-      }
-    }
-
-    console.log(`[Config] Loaded config: key=${display}, provider=${provider} from ${configPath}`);
-    return { key: binding, keyDisplay: display, provider };
+    raw = readFileSync(configPath, "utf-8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      // File not found — normal, use default
-      console.log(`[Config] No config file found at ${configPath}, using default (${DEFAULT_KEY_STRING})`);
-    } else {
-      console.warn(`[Config] Failed to load ${configPath}, using default:`, err);
+      console.log(`[Config] No config file found at ${configPath}, using defaults`);
+      return defaultConfig();
     }
-    return defaultConfig();
+    throw new ConfigError(configPath, `Failed to read file: ${(err as Error).message}`);
   }
+
+  // Parse JSON
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new ConfigError(configPath, "Invalid JSON syntax");
+  }
+
+  // Validate with zod
+  const result = configFileSchema.safeParse(json);
+  if (!result.success) {
+    const details = result.error.issues
+      .map((issue) => {
+        const path = issue.path.length > 0 ? `"${issue.path.join(".")}"` : "(root)";
+        return `  - ${path}: ${issue.message}`;
+      })
+      .join("\n");
+    throw new ConfigError(configPath, details);
+  }
+
+  const parsed = result.data;
+  const binding = parseKeyBinding(parsed.key);
+  const display = formatKeyDisplay(binding);
+
+  console.log(`[Config] Loaded config: key=${display}, provider=${parsed.provider} from ${configPath}`);
+  return { key: binding, keyDisplay: display, provider: parsed.provider };
 }

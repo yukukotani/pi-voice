@@ -13,7 +13,7 @@ import {
   removeRuntimeState,
 } from "./services/runtime-state.js";
 import { sendCommand } from "./services/daemon-ipc.js";
-import { loadConfig } from "./services/config.js";
+import { loadConfig, ConfigError } from "./services/config.js";
 import { resolveModelPath } from "./services/whisper-model.js";
 
 type Command = "start" | "status" | "stop";
@@ -132,7 +132,18 @@ async function cmdStart(): Promise<void> {
   }
 
   const cwd = process.cwd();
-  const config = loadConfig(cwd);
+
+  let config: ReturnType<typeof loadConfig>;
+  try {
+    config = loadConfig(cwd);
+  } catch (err) {
+    if (err instanceof ConfigError) {
+      console.error(err.message);
+    } else {
+      console.error(`Failed to load config: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    process.exit(1);
+  }
 
   // For local provider, ensure Whisper model is available before spawning daemon
   if (config.provider === "local") {
