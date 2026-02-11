@@ -17,7 +17,7 @@ export interface KeyBinding {
 }
 
 /** Supported speech provider */
-export type SpeechProvider = "local" | "gemini" | "openai";
+export type SpeechProvider = "local" | "gemini" | "openai" | "elevenlabs";
 
 export interface PiVoiceConfig {
   /** Key binding for push-to-talk (e.g. "ctrl+t", "meta+shift+i") */
@@ -224,7 +224,7 @@ const configFileSchema = z.object({
     )
     .optional()
     .default(DEFAULT_KEY_STRING),
-  provider: z.enum(["local", "gemini", "openai"]).optional().default(DEFAULT_PROVIDER),
+  provider: z.enum(["local", "gemini", "openai", "elevenlabs"]).optional().default(DEFAULT_PROVIDER),
 });
 
 // ── Config loader ────────────────────────────────────────────────────

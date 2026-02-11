@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { spawn } from "node:child_process";
 import type { SpeechProvider } from "./config.js";
 import { getGeminiClient } from "./gemini-client.js";
@@ -25,8 +26,8 @@ export const TTS_SAMPLE_RATE = 24000;
 export const TTS_CHANNELS = 1;
 export const TTS_BITS_PER_SAMPLE = 16;
 
-/** Chunk size for splitting OpenAI PCM response (~100ms of audio) */
-const OPENAI_PCM_CHUNK_SIZE = TTS_SAMPLE_RATE * (TTS_BITS_PER_SAMPLE / 8) * TTS_CHANNELS * 0.1; // 4800 bytes
+/** Chunk size for splitting PCM response (~100ms of audio) */
+const PCM_CHUNK_SIZE = TTS_SAMPLE_RATE * (TTS_BITS_PER_SAMPLE / 8) * TTS_CHANNELS * 0.1; // 4800 bytes
 
 // ── Gemini TTS ───────────────────────────────────────────────────────
 
@@ -124,7 +125,7 @@ async function* synthesizeStreamOpenAI(
 
   // Split into fixed-size chunks for smooth streaming playback
   while (offset < fullBuffer.length) {
-    const end = Math.min(offset + OPENAI_PCM_CHUNK_SIZE, fullBuffer.length);
+    const end = Math.min(offset + PCM_CHUNK_SIZE, fullBuffer.length);
     const chunk = fullBuffer.subarray(offset, end);
     totalBytes += chunk.length;
     yield chunk;
@@ -133,6 +134,63 @@ async function* synthesizeStreamOpenAI(
 
   logger.info(
     { provider: "openai", totalBytes, text: text.substring(0, 50) },
+    "Streamed PCM audio",
+  );
+}
+
+// ── ElevenLabs TTS ───────────────────────────────────────────────────
+
+let elevenlabsClient: ElevenLabsClient | null = null;
+
+function getElevenLabsClient(): ElevenLabsClient {
+  if (elevenlabsClient) return elevenlabsClient;
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    throw new Error("ELEVENLABS_API_KEY environment variable is required");
+  }
+  elevenlabsClient = new ElevenLabsClient({ apiKey });
+  return elevenlabsClient;
+}
+
+const DEFAULT_ELEVENLABS_VOICE_ID = "CwhRBWXzGAHq8TQ4Fs17";
+
+async function* synthesizeStreamElevenLabs(
+  text: string,
+): AsyncGenerator<Buffer, void, undefined> {
+  const client = getElevenLabsClient();
+  const voiceId = process.env.ELEVENLABS_VOICE_ID ?? DEFAULT_ELEVENLABS_VOICE_ID;
+  const modelId = process.env.ELEVENLABS_TTS_MODEL ?? "eleven_flash_v2_5";
+
+  // SDK returns a ReadableStream; outputFormat pcm_24000 gives raw 24kHz 16-bit signed LE mono PCM
+  const audio = await client.textToSpeech.convert(voiceId, {
+    text,
+    modelId,
+    outputFormat: "pcm_24000",
+  });
+
+  // Collect the stream into a Buffer, then split into fixed-size chunks
+  const chunks: Uint8Array[] = [];
+  const reader = audio.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  const fullBuffer = Buffer.concat(chunks);
+
+  let totalBytes = 0;
+  let offset = 0;
+
+  while (offset < fullBuffer.length) {
+    const end = Math.min(offset + PCM_CHUNK_SIZE, fullBuffer.length);
+    const chunk = fullBuffer.subarray(offset, end);
+    totalBytes += chunk.length;
+    yield chunk;
+    offset = end;
+  }
+
+  logger.info(
+    { provider: "elevenlabs", totalBytes, text: text.substring(0, 50) },
     "Streamed PCM audio",
   );
 }
@@ -199,6 +257,9 @@ export async function* synthesizeStream(
       );
     case "openai":
       yield* synthesizeStreamOpenAI(text);
+      break;
+    case "elevenlabs":
+      yield* synthesizeStreamElevenLabs(text);
       break;
     case "gemini":
     default:

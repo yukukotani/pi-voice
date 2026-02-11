@@ -52,7 +52,7 @@ You can configure pi-voice in `.pi/pi-voice.json`:
 | Key | Description |
 | --- | --- |
 | `key` | Push-to-talk shortcut. Combine modifiers (`ctrl`, `shift`, `alt`/`opt`, `meta`/`cmd`) and a main key with `+`. Examples: `"ctrl+t"`, `"alt+space"`, `"ctrl+shift+r"`. Default: `"meta+shift+i"`. |
-| `provider` | Speech provider for STT & TTS. `"local"`, `"gemini"` (Vertex AI or Gemini API), or `"openai"`. Default: `"local"`. |
+| `provider` | Speech provider for STT & TTS. `"local"`, `"gemini"` (Vertex AI or Gemini API), `"openai"`, or `"elevenlabs"`. Default: `"local"`. |
 
 ### Environment variables
 
@@ -61,6 +61,7 @@ You can configure pi-voice in `.pi/pi-voice.json`:
 | `local` | None (model is auto-downloaded on first launch). Optional: `WHISPER_MODEL_PATH` (custom model path), `WHISPER_MODEL` (model name, default `medium-q5_0`), `SAY_VOICE` (macOS `say` voice name, e.g. `"Kyoko"`). |
 | `gemini` | **Vertex AI:** `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (optional, default `us-central1`). **Gemini API:** `GEMINI_API_KEY` or `GOOGLE_API_KEY`. If `GOOGLE_CLOUD_PROJECT` is set, Vertex AI is used; set `GOOGLE_GENAI_USE_VERTEXAI=false` to force API key mode. |
 | `openai` | `OPENAI_API_KEY` |
+| `elevenlabs` | `ELEVENLABS_API_KEY`. Optional: `ELEVENLABS_VOICE_ID` (TTS voice, default `CwhRBWXzGAHq8TQ4Fs17`), `ELEVENLABS_TTS_MODEL` (default `eleven_flash_v2_5`). |
 
 #### Logging
 
