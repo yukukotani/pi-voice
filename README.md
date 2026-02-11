@@ -2,7 +2,7 @@
 
 Headless voice interface for the [Pi Coding Agent](https://github.com/badlogic/pi-mono). Hold a key, speak, and pi executes your instructions with voice feedback.
 
-#### Demo (using ElevenLabs provider)
+#### Demo using ElevenLabs provider (make sure unmuted)
 
 https://github.com/user-attachments/assets/76adb941-83cf-4394-b8d2-f6d73a1df8bc
 
