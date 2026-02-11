@@ -1,6 +1,6 @@
 {
   "name": "pi-voice",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "Voice interface for pi coding agent",
   "author": "Yuku Kotani",
   "license": "MIT",
