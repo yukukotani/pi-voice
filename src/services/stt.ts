@@ -1,4 +1,5 @@
 import OpenAI, { toFile } from "openai";
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import {
   Whisper,
   WhisperFullParams,
@@ -91,6 +92,43 @@ async function transcribeOpenAI(audioBuffer: Buffer): Promise<string> {
   return transcription.text?.trim() ?? "";
 }
 
+// ── ElevenLabs STT ───────────────────────────────────────────────────
+
+let elevenlabsClient: ElevenLabsClient | null = null;
+
+function getElevenLabsClient(): ElevenLabsClient {
+  if (elevenlabsClient) return elevenlabsClient;
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    throw new Error("ELEVENLABS_API_KEY environment variable is required");
+  }
+  elevenlabsClient = new ElevenLabsClient({ apiKey });
+  return elevenlabsClient;
+}
+
+async function transcribeElevenLabs(audioBuffer: Buffer): Promise<string> {
+  const client = getElevenLabsClient();
+
+  const result = await client.speechToText.convert({
+    file: {
+      data: audioBuffer,
+      filename: "recording.webm",
+      contentType: "audio/webm",
+    },
+    modelId: "scribe_v2",
+  });
+
+  // Response is a union type; SpeechToTextChunkResponseModel has .text
+  if ("text" in result) {
+    return (result.text ?? "").trim();
+  }
+  // MultichannelSpeechToTextResponseModel has .transcripts
+  if ("transcripts" in result && result.transcripts?.[0]) {
+    return (result.transcripts[0].text ?? "").trim();
+  }
+  return "";
+}
+
 // ── Local STT (Whisper) ──────────────────────────────────────────────
 
 /**
@@ -135,6 +173,9 @@ export async function transcribe(
     }
     case "openai":
       text = await transcribeOpenAI(Buffer.from(audioData));
+      break;
+    case "elevenlabs":
+      text = await transcribeElevenLabs(Buffer.from(audioData));
       break;
     case "gemini":
     default:
