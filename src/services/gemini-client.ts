@@ -14,6 +14,13 @@ import logger from "./logger.js";
 
 let geminiClient: GoogleGenAI | null = null;
 
+/**
+ * Reset the cached client (for testing only).
+ */
+export function _resetGeminiClient(): void {
+  geminiClient = null;
+}
+
 export function getGeminiClient(): GoogleGenAI {
   if (geminiClient) return geminiClient;
 
